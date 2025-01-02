@@ -1,6 +1,7 @@
 package main
 
 import "core:bufio"
+import "core:c"
 import "core:fmt"
 import "core:os"
 import "core:sys/posix"
@@ -15,6 +16,8 @@ CTRL_KEY :: proc(k: rune) -> rune {
 /*** data ***/
 
 editor_config :: struct {
+	screenrows:   int,
+	screencols:   int,
 	orig_termios: posix.termios,
 }
 
@@ -74,6 +77,31 @@ editor_read_key :: proc(reader: ^bufio.Reader) -> rune {
 	return char
 }
 
+foreign import libc "system:c"
+foreign libc {
+	ioctl :: proc(fd: c.int, request: c.ulong, #c_vararg args: ..any) -> c.int ---
+}
+
+winsize :: struct {
+	ws_row:    u16,
+	ws_col:    u16,
+	ws_xpixel: u16,
+	ws_ypixel: u16,
+}
+
+TIOCGWINSZ :: 0x40087468 // MacOS specific
+
+get_window_size :: proc(rows: ^int, cols: ^int) -> int {
+	ws: winsize
+
+	if ioctl(posix.STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0 {
+		return -1
+	}
+	cols^ = int(ws.ws_col)
+	rows^ = int(ws.ws_row)
+	return 0
+}
+
 /*** output ***/
 
 write_bytes :: proc(bytes: []u8) {
@@ -81,7 +109,7 @@ write_bytes :: proc(bytes: []u8) {
 }
 
 editor_draw_rows :: proc() {
-	for y := 0; y < 24; y += 1 {
+	for y := 0; y < E.screenrows; y += 1 {
 		write_bytes([]u8{'~', '\r', '\n'})
 	}
 }
@@ -115,10 +143,14 @@ editor_process_keypress :: proc(reader: ^bufio.Reader) -> bool {
 }
 
 /*** init ***/
+init_editor :: proc() {
+	if get_window_size(&E.screenrows, &E.screencols) == -1 {die("getWindowSize")}
+}
 
 main :: proc() {
 	enable_raw_mode()
 	defer disable_raw_mode()
+	init_editor()
 
 	reader: bufio.Reader
 	bufio.reader_init(&reader, os.stream_from_handle(os.stdin))
