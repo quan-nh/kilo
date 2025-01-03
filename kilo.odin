@@ -2,6 +2,7 @@ package main
 
 import "core:bufio"
 import "core:c"
+import "core:c/libc"
 import "core:fmt"
 import "core:os"
 import "core:sys/posix"
@@ -77,8 +78,24 @@ editor_read_key :: proc(reader: ^bufio.Reader) -> rune {
 	return char
 }
 
-foreign import libc "system:c"
-foreign libc {
+get_cursor_position :: proc(rows: ^int, cols: ^int) -> int {
+	buf: [32]byte
+	i := 0
+
+	if write_bytes([]u8{0x1b, '[', '6', 'n'}) != 4 {return -1}
+	for i < len(buf) - 1 {
+		if posix.read(posix.STDIN_FILENO, &buf[i], 1) != 1 {break}
+		if buf[i] == 'R' {break}
+		i += 1
+	}
+
+	if buf[0] != '\x1b' || buf[1] != '[' {return -1}
+	if libc.sscanf(cstring(&buf[2]), "%d;%d", rows, cols) != 2 {return -1}
+	return 0
+}
+
+foreign import libc2 "system:c"
+foreign libc2 {
 	ioctl :: proc(fd: c.int, request: c.ulong, #c_vararg args: ..any) -> c.int ---
 }
 
@@ -95,22 +112,28 @@ get_window_size :: proc(rows: ^int, cols: ^int) -> int {
 	ws: winsize
 
 	if ioctl(posix.STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0 {
-		return -1
+		if write_bytes([]u8{0x1b, '[', '9', '9', '9', 'C', 0x1b, '[', '9', '9', '9', 'B'}) !=
+		   12 {return -1}
+		return get_cursor_position(rows, cols)
+	} else {
+		cols^ = int(ws.ws_col)
+		rows^ = int(ws.ws_row)
+		return 0
 	}
-	cols^ = int(ws.ws_col)
-	rows^ = int(ws.ws_row)
-	return 0
 }
 
 /*** output ***/
 
-write_bytes :: proc(bytes: []u8) {
-	posix.write(posix.STDOUT_FILENO, &bytes[0], len(bytes))
+write_bytes :: proc(bytes: []u8) -> c.ssize_t {
+	return posix.write(posix.STDOUT_FILENO, &bytes[0], len(bytes))
 }
 
 editor_draw_rows :: proc() {
 	for y := 0; y < E.screenrows; y += 1 {
-		write_bytes([]u8{'~', '\r', '\n'})
+		write_bytes([]u8{'~'})
+		if y < E.screenrows - 1 {
+			write_bytes([]u8{'\r', '\n'})
+		}
 	}
 }
 
