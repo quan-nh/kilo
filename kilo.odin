@@ -17,6 +17,8 @@ CTRL_KEY :: proc(k: rune) -> rune {
 /*** data ***/
 
 editor_config :: struct {
+	cx:           int,
+	cy:           int,
 	screenrows:   int,
 	screencols:   int,
 	orig_termios: posix.termios,
@@ -159,27 +161,39 @@ editor_refresh_screen :: proc() {
 
 	editor_draw_rows(&ab)
 
-	append(&ab, 0x1b, '[', 'H')
+	buf := make([]byte, 32)
+	defer delete(buf)
+	fmt.bprintf(buf, "\x1b[%d;%dH", E.cy + 1, E.cx + 1)
+	append(&ab, ..buf)
+
 	append(&ab, 0x1b, '[', '?', '2', '5', 'h')
 
 	write_bytes(ab[:])
 }
 
 /*** input ***/
+editor_move_cursor :: proc(key: rune) {
+	switch key {
+	case 'a':
+		E.cx -= 1
+	case 'd':
+		E.cx += 1
+	case 'w':
+		E.cy -= 1
+	case 's':
+		E.cy += 1
+	}
+}
 
 editor_process_keypress :: proc(reader: ^bufio.Reader) -> bool {
 	c := editor_read_key(reader)
-
-	// if (unicode.is_control(c)) {
-	// 	fmt.printf("%d\r\n", c)
-	// } else {
-	// 	fmt.printf("%d ('%c')\r\n", c, c)
-	// }
 
 	switch c {
 	case CTRL_KEY('q'):
 		editor_refresh_screen()
 		return false
+	case 'w', 's', 'a', 'd':
+		editor_move_cursor(c)
 	}
 	return true
 }
