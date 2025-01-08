@@ -9,7 +9,7 @@ import "core:sys/posix"
 import "core:unicode"
 
 /*** defines ***/
-
+KILO_VERSION :: "0.0.1"
 CTRL_KEY :: proc(k: rune) -> rune {
 	return rune(byte(k) & 0x1f)
 }
@@ -130,7 +130,19 @@ write_bytes :: proc(bytes: []u8) -> c.ssize_t {
 
 editor_draw_rows :: proc(ab: ^[dynamic]byte) {
 	for y := 0; y < E.screenrows; y += 1 {
-		append(ab, '~')
+		if y == E.screenrows / 3 {
+			welcome := fmt.aprintf("Kilo editor -- version %s", KILO_VERSION)
+			padding := (E.screencols - len(welcome)) / 2
+			if padding > 0 {
+				append(ab, "~")
+				padding -= 1
+			}
+			for ; padding > 0; padding -= 1 {append(ab, " ")}
+			append(ab, ..transmute([]u8)welcome)
+		} else {
+			append(ab, '~')
+		}
+
 		append(ab, 0x1b, '[', 'K')
 		if y < E.screenrows - 1 {
 			append(ab, '\r', '\n')
