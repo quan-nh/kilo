@@ -70,14 +70,35 @@ enable_raw_mode :: proc() {
 	}
 }
 
-editor_read_key :: proc(reader: ^bufio.Reader) -> rune {
-	char, _, err := bufio.reader_read_rune(reader)
+editor_read_key :: proc() -> rune {
+	c: [1]byte
+	_, err := os.read(os.stdin, c[:])
 	if err == .EOF {
 		return 0
-	} else if err != .None {
+	} else if err != 0 {
 		die("read")
 	}
-	return char
+
+	if (c == 0x1b) {
+		seq: [3]byte
+		if posix.read(posix.STDIN_FILENO, &seq[0], 1) != 1 {return 0x1b}
+		if posix.read(posix.STDIN_FILENO, &seq[1], 1) != 1 {return 0x1b}
+		if seq[0] == '[' {
+			switch seq[1] {
+			case 'A':
+				return 'w'
+			case 'B':
+				return 's'
+			case 'C':
+				return 'd'
+			case 'D':
+				return 'a'
+			}
+		}
+		return 0x1b
+	} else {
+		return rune(c[0])
+	}
 }
 
 get_cursor_position :: proc(rows: ^int, cols: ^int) -> int {
@@ -185,8 +206,8 @@ editor_move_cursor :: proc(key: rune) {
 	}
 }
 
-editor_process_keypress :: proc(reader: ^bufio.Reader) -> bool {
-	c := editor_read_key(reader)
+editor_process_keypress :: proc() -> bool {
+	c := editor_read_key()
 
 	switch c {
 	case CTRL_KEY('q'):
@@ -208,13 +229,9 @@ main :: proc() {
 	defer disable_raw_mode()
 	init_editor()
 
-	reader: bufio.Reader
-	bufio.reader_init(&reader, os.stream_from_handle(os.stdin))
-	defer bufio.reader_destroy(&reader)
-
 	for {
 		editor_refresh_screen()
-		if !editor_process_keypress(&reader) {
+		if !editor_process_keypress() {
 			break
 		}
 	}
