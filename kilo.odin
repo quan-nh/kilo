@@ -19,6 +19,8 @@ Editor_Key :: enum {
 	ARROW_RIGHT,
 	ARROW_UP,
 	ARROW_DOWN,
+	HOME_KEY,
+	END_KEY,
 	PAGE_UP,
 	PAGE_DOWN,
 }
@@ -96,10 +98,18 @@ editor_read_key :: proc() -> rune {
 				if posix.read(posix.STDIN_FILENO, &seq[2], 1) != 1 {return 0x1b}
 				if seq[2] == '~' {
 					switch seq[1] {
+					case '1':
+						return rune(Editor_Key.HOME_KEY)
+					case '4':
+						return rune(Editor_Key.END_KEY)
 					case '5':
 						return rune(Editor_Key.PAGE_UP)
 					case '6':
 						return rune(Editor_Key.PAGE_DOWN)
+					case '7':
+						return rune(Editor_Key.HOME_KEY)
+					case '8':
+						return rune(Editor_Key.END_KEY)
 					}
 				}
 			} else {
@@ -112,8 +122,20 @@ editor_read_key :: proc() -> rune {
 					return rune(Editor_Key.ARROW_RIGHT)
 				case 'D':
 					return rune(Editor_Key.ARROW_LEFT)
+				case 'H':
+					return rune(Editor_Key.HOME_KEY)
+				case 'F':
+					return rune(Editor_Key.END_KEY)
 				}
-			}}
+			}
+		} else if seq[0] == 'O' {
+			switch seq[1] {
+			case 'H':
+				return rune(Editor_Key.HOME_KEY)
+			case 'F':
+				return rune(Editor_Key.END_KEY)
+			}
+		}
 		return 0x1b
 	} else {
 		return rune(c[0])
@@ -240,6 +262,10 @@ editor_process_keypress :: proc() -> bool {
 	case CTRL_KEY('q'):
 		editor_refresh_screen()
 		return false
+	case rune(Editor_Key.HOME_KEY):
+		E.cx = 0
+	case rune(Editor_Key.END_KEY):
+		E.cx = E.screencols - 1
 	case rune(Editor_Key.PAGE_UP), rune(Editor_Key.PAGE_DOWN):
 		for times := E.screenrows; times > 0; times -= 1 {
 			editor_move_cursor(
