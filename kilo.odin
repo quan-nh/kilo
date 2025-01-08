@@ -19,6 +19,7 @@ Editor_Key :: enum {
 	ARROW_RIGHT,
 	ARROW_UP,
 	ARROW_DOWN,
+	DEL_KEY,
 	HOME_KEY,
 	END_KEY,
 	PAGE_UP,
@@ -100,6 +101,8 @@ editor_read_key :: proc() -> rune {
 					switch seq[1] {
 					case '1':
 						return rune(Editor_Key.HOME_KEY)
+					case '3':
+						return rune(Editor_Key.DEL_KEY)
 					case '4':
 						return rune(Editor_Key.END_KEY)
 					case '5':
