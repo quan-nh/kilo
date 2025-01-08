@@ -128,22 +128,29 @@ write_bytes :: proc(bytes: []u8) -> c.ssize_t {
 	return posix.write(posix.STDOUT_FILENO, &bytes[0], len(bytes))
 }
 
-editor_draw_rows :: proc() {
+editor_draw_rows :: proc(ab: ^[dynamic]byte) {
 	for y := 0; y < E.screenrows; y += 1 {
-		write_bytes([]u8{'~'})
+		append(ab, '~')
+		append(ab, 0x1b, '[', 'K')
 		if y < E.screenrows - 1 {
-			write_bytes([]u8{'\r', '\n'})
+			append(ab, '\r', '\n')
 		}
 	}
 }
 
 editor_refresh_screen :: proc() {
-	write_bytes([]u8{0x1b, '[', '2', 'J'})
-	write_bytes([]u8{0x1b, '[', 'H'})
+	ab: [dynamic]byte
+	defer delete(ab)
 
-	editor_draw_rows()
+	append(&ab, 0x1b, '[', '?', '2', '5', 'l')
+	append(&ab, 0x1b, '[', 'H')
 
-	write_bytes([]u8{0x1b, '[', 'H'})
+	editor_draw_rows(&ab)
+
+	append(&ab, 0x1b, '[', 'H')
+	append(&ab, 0x1b, '[', '?', '2', '5', 'h')
+
+	write_bytes(ab[:])
 }
 
 /*** input ***/
