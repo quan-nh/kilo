@@ -1,6 +1,5 @@
 package main
 
-import "core:bufio"
 import "core:c"
 import "core:c/libc"
 import "core:fmt"
@@ -10,10 +9,17 @@ import "core:unicode"
 
 /*** defines ***/
 KILO_VERSION :: "0.0.1"
+
 CTRL_KEY :: proc(k: rune) -> rune {
 	return rune(byte(k) & 0x1f)
 }
 
+Editor_Key :: enum {
+	ARROW_LEFT  = 1000,
+	ARROW_RIGHT = 1001,
+	ARROW_UP    = 1002,
+	ARROW_DOWN  = 1003,
+}
 /*** data ***/
 
 editor_config :: struct {
@@ -86,13 +92,13 @@ editor_read_key :: proc() -> rune {
 		if seq[0] == '[' {
 			switch seq[1] {
 			case 'A':
-				return 'w'
+				return rune(Editor_Key.ARROW_UP)
 			case 'B':
-				return 's'
+				return rune(Editor_Key.ARROW_DOWN)
 			case 'C':
-				return 'd'
+				return rune(Editor_Key.ARROW_RIGHT)
 			case 'D':
-				return 'a'
+				return rune(Editor_Key.ARROW_LEFT)
 			}
 		}
 		return 0x1b
@@ -195,14 +201,22 @@ editor_refresh_screen :: proc() {
 /*** input ***/
 editor_move_cursor :: proc(key: rune) {
 	switch key {
-	case 'a':
-		E.cx -= 1
-	case 'd':
-		E.cx += 1
-	case 'w':
-		E.cy -= 1
-	case 's':
-		E.cy += 1
+	case rune(Editor_Key.ARROW_LEFT):
+		if E.cx != 0 {
+			E.cx -= 1
+		}
+	case rune(Editor_Key.ARROW_RIGHT):
+		if E.cx != E.screencols - 1 {
+			E.cx += 1
+		}
+	case rune(Editor_Key.ARROW_UP):
+		if E.cy != 0 {
+			E.cy -= 1
+		}
+	case rune(Editor_Key.ARROW_DOWN):
+		if E.cy != E.screenrows - 1 {
+			E.cy += 1
+		}
 	}
 }
 
@@ -213,7 +227,10 @@ editor_process_keypress :: proc() -> bool {
 	case CTRL_KEY('q'):
 		editor_refresh_screen()
 		return false
-	case 'w', 's', 'a', 'd':
+	case rune(Editor_Key.ARROW_LEFT),
+	     rune(Editor_Key.ARROW_RIGHT),
+	     rune(Editor_Key.ARROW_UP),
+	     rune(Editor_Key.ARROW_DOWN):
 		editor_move_cursor(c)
 	}
 	return true
