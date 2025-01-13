@@ -10,6 +10,7 @@ import "core:unicode"
 
 /*** defines ***/
 KILO_VERSION :: "0.0.1"
+KILO_TAB_STOP :: 8
 
 CTRL_KEY :: proc(k: rune) -> rune {
 	return rune(byte(k) & 0x1f)
@@ -28,6 +29,10 @@ Editor_Key :: enum {
 }
 /*** data ***/
 
+erow :: struct {
+	chars:  string,
+	render: string,
+}
 editor_config :: struct {
 	cx:           int,
 	cy:           int,
@@ -36,7 +41,7 @@ editor_config :: struct {
 	screenrows:   int,
 	screencols:   int,
 	numrows:      int,
-	row:          []string,
+	row:          [dynamic]erow,
 	orig_termios: posix.termios,
 }
 
@@ -194,6 +199,20 @@ get_window_size :: proc(rows: ^int, cols: ^int) -> int {
 	}
 }
 
+/*** row operations ***/
+editor_update_row :: proc(row: ^erow) {
+	row.render, _ = strings.replace_all(row.chars, "\t", strings.repeat(" ", KILO_TAB_STOP))
+}
+
+editor_append_row :: proc(s: string) {
+	row := erow {
+		chars = s,
+	}
+	editor_update_row(&row)
+	append(&E.row, row)
+	E.numrows += 1
+}
+
 /*** file i/o ***/
 editor_open :: proc(filename: string) {
 	data, ok := os.read_entire_file(filename)
@@ -201,10 +220,12 @@ editor_open :: proc(filename: string) {
 		// could not read file
 		return
 	}
-	// defer delete(data)
+	defer delete(data)
 
-	E.row, _ = strings.split_lines(string(data))
-	E.numrows = len(E.row)
+	it := string(data)
+	for line in strings.split_lines_iterator(&it) {
+		editor_append_row(line)
+	}
 }
 
 /*** output ***/
@@ -245,10 +266,10 @@ editor_draw_rows :: proc(ab: ^[dynamic]byte) {
 				append(ab, '~')
 			}
 		} else {
-			len := len(E.row[filerow]) - E.coloff
+			len := len(E.row[filerow].render) - E.coloff
 			if len < 0 {len = 0}
 			if len > E.screencols {len = E.screencols}
-			append(ab, ..transmute([]u8)E.row[filerow][E.coloff:E.coloff + len])
+			append(ab, ..transmute([]u8)E.row[filerow].render[E.coloff:E.coloff + len])
 		}
 
 		append(ab, 0x1b, '[', 'K')
@@ -281,16 +302,23 @@ editor_refresh_screen :: proc() {
 
 /*** input ***/
 editor_move_cursor :: proc(key: rune) {
-	row: Maybe(string) = E.cy >= E.numrows ? nil : E.row[E.cy]
+	row: Maybe(string) = E.cy >= E.numrows ? nil : E.row[E.cy].render
 
 	switch key {
 	case rune(Editor_Key.ARROW_LEFT):
 		if E.cx != 0 {
 			E.cx -= 1
+		} else if E.cy > 0 {
+			E.cy -= 1
+			E.cx = len(E.row[E.cy].render)
 		}
 	case rune(Editor_Key.ARROW_RIGHT):
-		if value, ok := row.?; ok && E.cx < len(value) {
+		value, ok := row.?
+		if ok && E.cx < len(value) {
 			E.cx += 1
+		} else if ok && E.cx == len(value) {
+			E.cy += 1
+			E.cx = 0
 		}
 	case rune(Editor_Key.ARROW_UP):
 		if E.cy != 0 {
@@ -302,7 +330,7 @@ editor_move_cursor :: proc(key: rune) {
 		}
 	}
 
-	rowlen := E.cy >= E.numrows ? 0 : len(E.row[E.cy])
+	rowlen := E.cy >= E.numrows ? 0 : len(E.row[E.cy].render)
 	if E.cx > rowlen {
 		E.cx = rowlen
 	}
