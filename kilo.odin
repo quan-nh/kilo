@@ -4,6 +4,7 @@ import "core:c"
 import "core:c/libc"
 import "core:fmt"
 import "core:os"
+import "core:strings"
 import "core:sys/posix"
 import "core:unicode"
 
@@ -32,6 +33,8 @@ editor_config :: struct {
 	cy:           int,
 	screenrows:   int,
 	screencols:   int,
+	numrows:      int,
+	row:          []string,
 	orig_termios: posix.termios,
 }
 
@@ -189,6 +192,19 @@ get_window_size :: proc(rows: ^int, cols: ^int) -> int {
 	}
 }
 
+/*** file i/o ***/
+editor_open :: proc(filename: string) {
+	data, ok := os.read_entire_file(filename)
+	if !ok {
+		// could not read file
+		return
+	}
+	// defer delete(data)
+
+	E.row, _ = strings.split_lines(string(data))
+	E.numrows = len(E.row)
+}
+
 /*** output ***/
 
 write_bytes :: proc(bytes: []u8) -> c.ssize_t {
@@ -197,17 +213,21 @@ write_bytes :: proc(bytes: []u8) -> c.ssize_t {
 
 editor_draw_rows :: proc(ab: ^[dynamic]byte) {
 	for y := 0; y < E.screenrows; y += 1 {
-		if y == E.screenrows / 3 {
-			welcome := fmt.aprintf("Kilo editor -- version %s", KILO_VERSION)
-			padding := (E.screencols - len(welcome)) / 2
-			if padding > 0 {
-				append(ab, "~")
-				padding -= 1
+		if y >= E.numrows {
+			if E.numrows == 0 && y == E.screenrows / 3 {
+				welcome := fmt.aprintf("Kilo editor -- version %s", KILO_VERSION)
+				padding := (E.screencols - len(welcome)) / 2
+				if padding > 0 {
+					append(ab, "~")
+					padding -= 1
+				}
+				for ; padding > 0; padding -= 1 {append(ab, " ")}
+				append(ab, ..transmute([]u8)welcome)
+			} else {
+				append(ab, '~')
 			}
-			for ; padding > 0; padding -= 1 {append(ab, " ")}
-			append(ab, ..transmute([]u8)welcome)
 		} else {
-			append(ab, '~')
+			append(ab, ..transmute([]u8)E.row[y])
 		}
 
 		append(ab, 0x1b, '[', 'K')
@@ -292,7 +312,11 @@ init_editor :: proc() {
 main :: proc() {
 	enable_raw_mode()
 	defer disable_raw_mode()
+
 	init_editor()
+	if len(os.args) > 1 {
+		editor_open(os.args[1])
+	}
 
 	for {
 		editor_refresh_screen()
