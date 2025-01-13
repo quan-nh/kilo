@@ -31,6 +31,8 @@ Editor_Key :: enum {
 editor_config :: struct {
 	cx:           int,
 	cy:           int,
+	rowoff:       int,
+	coloff:       int,
 	screenrows:   int,
 	screencols:   int,
 	numrows:      int,
@@ -211,9 +213,19 @@ write_bytes :: proc(bytes: []u8) -> c.ssize_t {
 	return posix.write(posix.STDOUT_FILENO, &bytes[0], len(bytes))
 }
 
+editor_scroll :: proc() {
+	if E.cy < E.rowoff {
+		E.rowoff = E.cy
+	}
+	if E.cy >= E.rowoff + E.screenrows {
+		E.rowoff = E.cy - E.screenrows + 1
+	}
+}
+
 editor_draw_rows :: proc(ab: ^[dynamic]byte) {
 	for y := 0; y < E.screenrows; y += 1 {
-		if y >= E.numrows {
+		filerow := y + E.rowoff
+		if filerow >= E.numrows {
 			if E.numrows == 0 && y == E.screenrows / 3 {
 				welcome := fmt.aprintf("Kilo editor -- version %s", KILO_VERSION)
 				padding := (E.screencols - len(welcome)) / 2
@@ -227,7 +239,7 @@ editor_draw_rows :: proc(ab: ^[dynamic]byte) {
 				append(ab, '~')
 			}
 		} else {
-			append(ab, ..transmute([]u8)E.row[y])
+			append(ab, ..transmute([]u8)E.row[filerow])
 		}
 
 		append(ab, 0x1b, '[', 'K')
@@ -238,6 +250,8 @@ editor_draw_rows :: proc(ab: ^[dynamic]byte) {
 }
 
 editor_refresh_screen :: proc() {
+	editor_scroll()
+
 	ab: [dynamic]byte
 	defer delete(ab)
 
@@ -248,7 +262,7 @@ editor_refresh_screen :: proc() {
 
 	buf := make([]byte, 32)
 	defer delete(buf)
-	fmt.bprintf(buf, "\x1b[%d;%dH", E.cy + 1, E.cx + 1)
+	fmt.bprintf(buf, "\x1b[%d;%dH", E.cy - E.rowoff + 1, E.cx + 1)
 	append(&ab, ..buf)
 
 	append(&ab, 0x1b, '[', '?', '2', '5', 'h')
@@ -272,7 +286,7 @@ editor_move_cursor :: proc(key: rune) {
 			E.cy -= 1
 		}
 	case rune(Editor_Key.ARROW_DOWN):
-		if E.cy != E.screenrows - 1 {
+		if E.cy < E.numrows {
 			E.cy += 1
 		}
 	}
