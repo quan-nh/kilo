@@ -220,6 +220,12 @@ editor_scroll :: proc() {
 	if E.cy >= E.rowoff + E.screenrows {
 		E.rowoff = E.cy - E.screenrows + 1
 	}
+	if E.cx < E.coloff {
+		E.coloff = E.cx
+	}
+	if E.cx >= E.coloff + E.screencols {
+		E.coloff = E.cx - E.screencols + 1
+	}
 }
 
 editor_draw_rows :: proc(ab: ^[dynamic]byte) {
@@ -239,7 +245,10 @@ editor_draw_rows :: proc(ab: ^[dynamic]byte) {
 				append(ab, '~')
 			}
 		} else {
-			append(ab, ..transmute([]u8)E.row[filerow])
+			len := len(E.row[filerow]) - E.coloff
+			if len < 0 {len = 0}
+			if len > E.screencols {len = E.screencols}
+			append(ab, ..transmute([]u8)E.row[filerow][E.coloff:E.coloff + len])
 		}
 
 		append(ab, 0x1b, '[', 'K')
@@ -262,7 +271,7 @@ editor_refresh_screen :: proc() {
 
 	buf := make([]byte, 32)
 	defer delete(buf)
-	fmt.bprintf(buf, "\x1b[%d;%dH", E.cy - E.rowoff + 1, E.cx + 1)
+	fmt.bprintf(buf, "\x1b[%d;%dH", E.cy - E.rowoff + 1, E.cx - E.coloff + 1)
 	append(&ab, ..buf)
 
 	append(&ab, 0x1b, '[', '?', '2', '5', 'h')
@@ -272,13 +281,15 @@ editor_refresh_screen :: proc() {
 
 /*** input ***/
 editor_move_cursor :: proc(key: rune) {
+	row: Maybe(string) = E.cy >= E.numrows ? nil : E.row[E.cy]
+
 	switch key {
 	case rune(Editor_Key.ARROW_LEFT):
 		if E.cx != 0 {
 			E.cx -= 1
 		}
 	case rune(Editor_Key.ARROW_RIGHT):
-		if E.cx != E.screencols - 1 {
+		if value, ok := row.?; ok && E.cx < len(value) {
 			E.cx += 1
 		}
 	case rune(Editor_Key.ARROW_UP):
@@ -289,6 +300,11 @@ editor_move_cursor :: proc(key: rune) {
 		if E.cy < E.numrows {
 			E.cy += 1
 		}
+	}
+
+	rowlen := E.cy >= E.numrows ? 0 : len(E.row[E.cy])
+	if E.cx > rowlen {
+		E.cx = rowlen
 	}
 }
 
