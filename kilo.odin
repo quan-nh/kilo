@@ -36,6 +36,7 @@ erow :: struct {
 editor_config :: struct {
 	cx:           int,
 	cy:           int,
+	rx:           int,
 	rowoff:       int,
 	coloff:       int,
 	screenrows:   int,
@@ -200,6 +201,16 @@ get_window_size :: proc(rows: ^int, cols: ^int) -> int {
 }
 
 /*** row operations ***/
+editor_row_cx_to_rx :: proc(row: ^erow, cx: int) -> int {
+	rx := 0
+	for j := 0; j < cx; j += 1 {
+		if row.chars[j] == '\t' {
+			rx += (KILO_TAB_STOP - 1) - (rx % KILO_TAB_STOP)}
+		rx += 1
+	}
+	return rx
+}
+
 editor_update_row :: proc(row: ^erow) {
 	row.render, _ = strings.replace_all(row.chars, "\t", strings.repeat(" ", KILO_TAB_STOP))
 }
@@ -235,17 +246,21 @@ write_bytes :: proc(bytes: []u8) -> c.ssize_t {
 }
 
 editor_scroll :: proc() {
+	if E.cy < E.numrows {
+		E.rx = editor_row_cx_to_rx(&E.row[E.cy], E.cx)
+	}
+
 	if E.cy < E.rowoff {
 		E.rowoff = E.cy
 	}
 	if E.cy >= E.rowoff + E.screenrows {
 		E.rowoff = E.cy - E.screenrows + 1
 	}
-	if E.cx < E.coloff {
-		E.coloff = E.cx
+	if E.rx < E.coloff {
+		E.coloff = E.rx
 	}
-	if E.cx >= E.coloff + E.screencols {
-		E.coloff = E.cx - E.screencols + 1
+	if E.rx >= E.coloff + E.screencols {
+		E.coloff = E.rx - E.screencols + 1
 	}
 }
 
@@ -292,7 +307,7 @@ editor_refresh_screen :: proc() {
 
 	buf := make([]byte, 32)
 	defer delete(buf)
-	fmt.bprintf(buf, "\x1b[%d;%dH", E.cy - E.rowoff + 1, E.cx - E.coloff + 1)
+	fmt.bprintf(buf, "\x1b[%d;%dH", E.cy - E.rowoff + 1, E.rx - E.coloff + 1)
 	append(&ab, ..buf)
 
 	append(&ab, 0x1b, '[', '?', '2', '5', 'h')
@@ -302,7 +317,7 @@ editor_refresh_screen :: proc() {
 
 /*** input ***/
 editor_move_cursor :: proc(key: rune) {
-	row: Maybe(string) = E.cy >= E.numrows ? nil : E.row[E.cy].render
+	row: Maybe(string) = E.cy >= E.numrows ? nil : E.row[E.cy].chars
 
 	switch key {
 	case rune(Editor_Key.ARROW_LEFT):
@@ -310,7 +325,7 @@ editor_move_cursor :: proc(key: rune) {
 			E.cx -= 1
 		} else if E.cy > 0 {
 			E.cy -= 1
-			E.cx = len(E.row[E.cy].render)
+			E.cx = len(E.row[E.cy].chars)
 		}
 	case rune(Editor_Key.ARROW_RIGHT):
 		value, ok := row.?
@@ -330,7 +345,7 @@ editor_move_cursor :: proc(key: rune) {
 		}
 	}
 
-	rowlen := E.cy >= E.numrows ? 0 : len(E.row[E.cy].render)
+	rowlen := E.cy >= E.numrows ? 0 : len(E.row[E.cy].chars)
 	if E.cx > rowlen {
 		E.cx = rowlen
 	}
