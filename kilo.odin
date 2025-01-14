@@ -361,8 +361,17 @@ editor_process_keypress :: proc() -> bool {
 	case rune(Editor_Key.HOME_KEY):
 		E.cx = 0
 	case rune(Editor_Key.END_KEY):
-		E.cx = E.screencols - 1
+		if E.cy < E.numrows {
+			E.cx = len(E.row[E.cy].chars)
+		}
 	case rune(Editor_Key.PAGE_UP), rune(Editor_Key.PAGE_DOWN):
+		if c == rune(Editor_Key.PAGE_UP) {
+			E.cy = E.rowoff
+		} else if c == rune(Editor_Key.PAGE_DOWN) {
+			E.cy = E.rowoff + E.screenrows - 1
+			if E.cy > E.numrows {E.cy = E.numrows}
+		}
+
 		for times := E.screenrows; times > 0; times -= 1 {
 			editor_move_cursor(
 				c == rune(Editor_Key.PAGE_UP) ? rune(Editor_Key.ARROW_UP) : rune(Editor_Key.ARROW_DOWN),
