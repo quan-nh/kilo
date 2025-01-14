@@ -43,6 +43,7 @@ editor_config :: struct {
 	screencols:   int,
 	numrows:      int,
 	row:          [dynamic]erow,
+	filename:     string,
 	orig_termios: posix.termios,
 }
 
@@ -226,6 +227,8 @@ editor_append_row :: proc(s: string) {
 
 /*** file i/o ***/
 editor_open :: proc(filename: string) {
+	E.filename = filename
+
 	data, ok := os.read_entire_file(filename)
 	if !ok {
 		// could not read file
@@ -288,10 +291,40 @@ editor_draw_rows :: proc(ab: ^[dynamic]byte) {
 		}
 
 		append(ab, 0x1b, '[', 'K')
-		if y < E.screenrows - 1 {
-			append(ab, '\r', '\n')
+		append(ab, '\r', '\n')
+	}
+}
+
+editor_draw_status_bar :: proc(ab: ^[dynamic]byte) {
+	append(ab, 0x1b, '[', '7', 'm')
+
+	status := make([]byte, 80)
+	rstatus := make([]byte, 80)
+	defer delete(status)
+	defer delete(rstatus)
+	slen := len(
+		fmt.bprintf(
+			status,
+			"%.20s - %d lines",
+			E.filename != "" ? E.filename : "[No Name]",
+			E.numrows,
+		),
+	)
+	rlen := len(fmt.bprintf(rstatus, "%d/%d", E.cy + 1, E.numrows))
+	if slen > E.screencols {slen = E.screencols}
+	append(ab, ..status[:slen])
+
+	for slen < E.screencols {
+		if E.screencols - slen == rlen {
+			append(ab, ..rstatus[:rlen])
+			break
+		} else {
+			append(ab, " ")
+			slen += 1
 		}
 	}
+
+	append(ab, 0x1b, '[', 'm')
 }
 
 editor_refresh_screen :: proc() {
@@ -304,6 +337,7 @@ editor_refresh_screen :: proc() {
 	append(&ab, 0x1b, '[', 'H')
 
 	editor_draw_rows(&ab)
+	editor_draw_status_bar(&ab)
 
 	buf := make([]byte, 32)
 	defer delete(buf)
@@ -389,6 +423,7 @@ editor_process_keypress :: proc() -> bool {
 /*** init ***/
 init_editor :: proc() {
 	if get_window_size(&E.screenrows, &E.screencols) == -1 {die("getWindowSize")}
+	E.screenrows -= 1
 }
 
 main :: proc() {
