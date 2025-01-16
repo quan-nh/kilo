@@ -18,6 +18,7 @@ CTRL_KEY :: proc(k: rune) -> rune {
 }
 
 Editor_Key :: enum {
+	BACKSPACE = 127,
 	ARROW_LEFT = 1000,
 	ARROW_RIGHT,
 	ARROW_UP,
@@ -433,6 +434,9 @@ editor_process_keypress :: proc() -> bool {
 	c := editor_read_key()
 
 	switch c {
+	case '\r':
+		/* TODO */
+		break
 	case CTRL_KEY('q'):
 		editor_refresh_screen()
 		return false
@@ -442,6 +446,11 @@ editor_process_keypress :: proc() -> bool {
 		if E.cy < E.numrows {
 			E.cx = len(E.row[E.cy].chars)
 		}
+
+	case rune(Editor_Key.BACKSPACE), CTRL_KEY('h'), rune(Editor_Key.DEL_KEY):
+		/* TODO */
+		break
+
 	case rune(Editor_Key.PAGE_UP), rune(Editor_Key.PAGE_DOWN):
 		if c == rune(Editor_Key.PAGE_UP) {
 			E.cy = E.rowoff
@@ -460,6 +469,10 @@ editor_process_keypress :: proc() -> bool {
 	     rune(Editor_Key.ARROW_UP),
 	     rune(Editor_Key.ARROW_DOWN):
 		editor_move_cursor(c)
+
+	case CTRL_KEY('l'), 0x1b:
+		break
+
 	case:
 		editor_insert_char(c)
 	}
