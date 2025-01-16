@@ -271,6 +271,25 @@ editor_open :: proc(filename: string) {
 	}
 }
 
+editor_save :: proc() {
+	if E.filename == "" {return}
+
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+
+	for row in E.row {
+		strings.write_string(&builder, row.chars)
+		strings.write_string(&builder, "\n")
+	}
+
+	content := strings.to_string(builder)
+	if os.write_entire_file(E.filename, transmute([]u8)content) {
+		editor_set_status_message("%d bytes written to disk", len(content))
+	} else {
+		editor_set_status_message("Can't save! I/O error: %s", os.get_last_error_string())
+	}
+}
+
 /*** output ***/
 
 write_bytes :: proc(bytes: []u8) -> c.ssize_t {
@@ -440,6 +459,9 @@ editor_process_keypress :: proc() -> bool {
 	case CTRL_KEY('q'):
 		editor_refresh_screen()
 		return false
+	case CTRL_KEY('s'):
+		editor_save()
+
 	case rune(Editor_Key.HOME_KEY):
 		E.cx = 0
 	case rune(Editor_Key.END_KEY):
@@ -494,7 +516,7 @@ main :: proc() {
 		editor_open(os.args[1])
 	}
 
-	editor_set_status_message("HELP: Ctrl-Q = quit")
+	editor_set_status_message("HELP: Ctrl-S = save | Ctrl-Q = quit")
 
 	for {
 		editor_refresh_screen()
