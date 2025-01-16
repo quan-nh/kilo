@@ -12,6 +12,7 @@ import "core:unicode"
 /*** defines ***/
 KILO_VERSION :: "0.0.1"
 KILO_TAB_STOP :: 8
+KILO_QUIT_TIMES :: 3
 
 CTRL_KEY :: proc(k: rune) -> rune {
 	return rune(byte(k) & 0x1f)
@@ -45,6 +46,7 @@ editor_config :: struct {
 	screencols:     int,
 	numrows:        int,
 	row:            [dynamic]erow,
+	dirty:          int,
 	filename:       string,
 	statusmsg:      string,
 	statusmsg_time: i64,
@@ -228,6 +230,7 @@ editor_append_row :: proc(s: string) {
 	editor_update_row(&row)
 	append(&E.row, row)
 	E.numrows += 1
+	E.dirty += 1
 }
 
 editor_row_insert_char :: proc(row: ^erow, at: int, c: rune) {
@@ -243,6 +246,7 @@ editor_row_insert_char :: proc(row: ^erow, at: int, c: rune) {
 
 	row.chars = strings.to_string(builder)
 	editor_update_row(row)
+	E.dirty += 1
 }
 
 /*** editor operations ***/
@@ -269,6 +273,7 @@ editor_open :: proc(filename: string) {
 	for line in strings.split_lines_iterator(&it) {
 		editor_append_row(line)
 	}
+	E.dirty = 0
 }
 
 editor_save :: proc() {
@@ -284,6 +289,7 @@ editor_save :: proc() {
 
 	content := strings.to_string(builder)
 	if os.write_entire_file(E.filename, transmute([]u8)content) {
+		E.dirty = 0
 		editor_set_status_message("%d bytes written to disk", len(content))
 	} else {
 		editor_set_status_message("Can't save! I/O error: %s", os.get_last_error_string())
@@ -353,9 +359,10 @@ editor_draw_status_bar :: proc(ab: ^[dynamic]byte) {
 	slen := len(
 		fmt.bprintf(
 			status,
-			"%.20s - %d lines",
+			"%.20s - %d lines %s",
 			E.filename != "" ? E.filename : "[No Name]",
 			E.numrows,
+			E.dirty > 0 ? "(modified)" : "",
 		),
 	)
 	rlen := len(fmt.bprintf(rstatus, "%d/%d", E.cy + 1, E.numrows))
@@ -450,6 +457,7 @@ editor_move_cursor :: proc(key: rune) {
 }
 
 editor_process_keypress :: proc() -> bool {
+	@(static) quit_times := KILO_QUIT_TIMES
 	c := editor_read_key()
 
 	switch c {
@@ -457,8 +465,18 @@ editor_process_keypress :: proc() -> bool {
 		/* TODO */
 		break
 	case CTRL_KEY('q'):
-		editor_refresh_screen()
-		return false
+		if E.dirty > 0 && quit_times > 0 {
+			editor_set_status_message(
+				"WARNING!!! File has unsaved changes. Press Ctrl-Q %d more times to quit.",
+				quit_times,
+			)
+			quit_times -= 1
+			return true
+		} else {
+			write_bytes([]u8{0x1b, '[', '2', 'J'})
+			write_bytes([]u8{0x1b, '[', 'H'})
+			return false
+		}
 	case CTRL_KEY('s'):
 		editor_save()
 
@@ -498,6 +516,8 @@ editor_process_keypress :: proc() -> bool {
 	case:
 		editor_insert_char(c)
 	}
+
+	quit_times = KILO_QUIT_TIMES
 	return true
 }
 
