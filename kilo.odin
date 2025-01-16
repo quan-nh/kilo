@@ -6,6 +6,7 @@ import "core:fmt"
 import "core:os"
 import "core:strings"
 import "core:sys/posix"
+import "core:time"
 import "core:unicode"
 
 /*** defines ***/
@@ -34,17 +35,19 @@ erow :: struct {
 	render: string,
 }
 editor_config :: struct {
-	cx:           int,
-	cy:           int,
-	rx:           int,
-	rowoff:       int,
-	coloff:       int,
-	screenrows:   int,
-	screencols:   int,
-	numrows:      int,
-	row:          [dynamic]erow,
-	filename:     string,
-	orig_termios: posix.termios,
+	cx:             int,
+	cy:             int,
+	rx:             int,
+	rowoff:         int,
+	coloff:         int,
+	screenrows:     int,
+	screencols:     int,
+	numrows:        int,
+	row:            [dynamic]erow,
+	filename:       string,
+	statusmsg:      string,
+	statusmsg_time: i64,
+	orig_termios:   posix.termios,
 }
 
 E: editor_config
@@ -95,11 +98,12 @@ enable_raw_mode :: proc() {
 
 editor_read_key :: proc() -> rune {
 	c: [1]byte
-	_, err := os.read(os.stdin, c[:])
-	if err == .EOF {
-		return 0
-	} else if err != 0 {
-		die("read")
+	for {
+		nread := posix.read(posix.STDIN_FILENO, &c[0], 1)
+		if nread == 1 {break}
+		if nread == -1 && posix.errno() == .EAGAIN {
+			die("read")
+		}
 	}
 
 	if (c == 0x1b) {
@@ -225,6 +229,30 @@ editor_append_row :: proc(s: string) {
 	E.numrows += 1
 }
 
+editor_row_insert_char :: proc(row: ^erow, at: int, c: rune) {
+	at := at
+	if at < 0 || at > len(row.chars) {at = len(row.chars)}
+
+	builder := strings.builder_make()
+	// defer strings.builder_destroy(&builder)
+
+	strings.write_string(&builder, row.chars[:at])
+	strings.write_rune(&builder, c)
+	strings.write_string(&builder, row.chars[at:])
+
+	row.chars = strings.to_string(builder)
+	editor_update_row(row)
+}
+
+/*** editor operations ***/
+editor_insert_char :: proc(c: rune) {
+	if E.cy == E.numrows {
+		editor_append_row("")
+	}
+	editor_row_insert_char(&E.row[E.cy], E.cx, c)
+	E.cx += 1
+}
+
 /*** file i/o ***/
 editor_open :: proc(filename: string) {
 	E.filename = filename
@@ -325,6 +353,16 @@ editor_draw_status_bar :: proc(ab: ^[dynamic]byte) {
 	}
 
 	append(ab, 0x1b, '[', 'm')
+	append(ab, '\r', '\n')
+}
+
+editor_draw_message_bar :: proc(ab: ^[dynamic]byte) {
+	append(ab, 0x1b, '[', 'K')
+	msglen := len(E.statusmsg)
+	if msglen > E.screencols {msglen = E.screencols}
+	if msglen > 0 && time.time_to_unix(time.now()) - E.statusmsg_time < 5 {
+		append(ab, ..transmute([]u8)E.statusmsg[:msglen])
+	}
 }
 
 editor_refresh_screen :: proc() {
@@ -338,6 +376,7 @@ editor_refresh_screen :: proc() {
 
 	editor_draw_rows(&ab)
 	editor_draw_status_bar(&ab)
+	editor_draw_message_bar(&ab)
 
 	buf := make([]byte, 32)
 	defer delete(buf)
@@ -347,6 +386,11 @@ editor_refresh_screen :: proc() {
 	append(&ab, 0x1b, '[', '?', '2', '5', 'h')
 
 	write_bytes(ab[:])
+}
+
+editor_set_status_message :: proc(sfmt: string, args: ..any) {
+	E.statusmsg = fmt.tprintf(sfmt, ..args)
+	E.statusmsg_time = time.time_to_unix(time.now())
 }
 
 /*** input ***/
@@ -416,6 +460,8 @@ editor_process_keypress :: proc() -> bool {
 	     rune(Editor_Key.ARROW_UP),
 	     rune(Editor_Key.ARROW_DOWN):
 		editor_move_cursor(c)
+	case:
+		editor_insert_char(c)
 	}
 	return true
 }
@@ -423,7 +469,7 @@ editor_process_keypress :: proc() -> bool {
 /*** init ***/
 init_editor :: proc() {
 	if get_window_size(&E.screenrows, &E.screencols) == -1 {die("getWindowSize")}
-	E.screenrows -= 1
+	E.screenrows -= 2
 }
 
 main :: proc() {
@@ -434,6 +480,8 @@ main :: proc() {
 	if len(os.args) > 1 {
 		editor_open(os.args[1])
 	}
+
+	editor_set_status_message("HELP: Ctrl-Q = quit")
 
 	for {
 		editor_refresh_screen()
