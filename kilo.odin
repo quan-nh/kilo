@@ -249,6 +249,20 @@ editor_row_insert_char :: proc(row: ^erow, at: int, c: rune) {
 	E.dirty += 1
 }
 
+editor_row_del_char :: proc(row: ^erow, at: int) {
+	if at < 0 || at >= len(row.chars) {return}
+
+	b := strings.builder_make()
+	// defer strings.builder_destroy(&b)
+
+	strings.write_string(&b, row.chars[:at])
+	strings.write_string(&b, row.chars[at + 1:])
+
+	row.chars = strings.to_string(b)
+	editor_update_row(row)
+	E.dirty += 1
+}
+
 /*** editor operations ***/
 editor_insert_char :: proc(c: rune) {
 	if E.cy == E.numrows {
@@ -256,6 +270,14 @@ editor_insert_char :: proc(c: rune) {
 	}
 	editor_row_insert_char(&E.row[E.cy], E.cx, c)
 	E.cx += 1
+}
+
+editor_del_char :: proc() {
+	if E.cy == E.numrows {return}
+	if E.cx > 0 {
+		editor_row_del_char(&E.row[E.cy], E.cx - 1)
+		E.cx -= 1
+	}
 }
 
 /*** file i/o ***/
@@ -488,8 +510,8 @@ editor_process_keypress :: proc() -> bool {
 		}
 
 	case rune(Editor_Key.BACKSPACE), CTRL_KEY('h'), rune(Editor_Key.DEL_KEY):
-		/* TODO */
-		break
+		if c == rune(Editor_Key.DEL_KEY) {editor_move_cursor(rune(Editor_Key.ARROW_RIGHT))}
+		editor_del_char()
 
 	case rune(Editor_Key.PAGE_UP), rune(Editor_Key.PAGE_DOWN):
 		if c == rune(Editor_Key.PAGE_UP) {
