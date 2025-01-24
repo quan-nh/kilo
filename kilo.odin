@@ -223,12 +223,14 @@ editor_update_row :: proc(row: ^erow) {
 	row.render, _ = strings.replace_all(row.chars, "\t", strings.repeat(" ", KILO_TAB_STOP))
 }
 
-editor_append_row :: proc(s: string) {
+editor_insert_row :: proc(at: int, s: string) {
+	if at < 0 || at > E.numrows {return}
+
 	row := erow {
 		chars = s,
 	}
 	editor_update_row(&row)
-	append(&E.row, row)
+	inject_at(&E.row, at, row)
 	E.numrows += 1
 	E.dirty += 1
 }
@@ -279,10 +281,24 @@ editor_row_del_char :: proc(row: ^erow, at: int) {
 /*** editor operations ***/
 editor_insert_char :: proc(c: rune) {
 	if E.cy == E.numrows {
-		editor_append_row("")
+		editor_insert_row(E.numrows, "")
 	}
 	editor_row_insert_char(&E.row[E.cy], E.cx, c)
 	E.cx += 1
+}
+
+editor_insert_newline :: proc() {
+	if E.cx == 0 {
+		editor_insert_row(E.cy, "")
+	} else {
+		row := &E.row[E.cy]
+		editor_insert_row(E.cy + 1, row.chars[E.cx:])
+		row = &E.row[E.cy]
+		row.chars = row.chars[:E.cx]
+		editor_update_row(row)
+	}
+	E.cy += 1
+	E.cx = 0
 }
 
 editor_del_char :: proc() {
@@ -314,7 +330,7 @@ editor_open :: proc(filename: string) {
 
 	it := string(data)
 	for line in strings.split_lines_iterator(&it) {
-		editor_append_row(line)
+		editor_insert_row(E.numrows, line)
 	}
 	E.dirty = 0
 }
@@ -505,8 +521,7 @@ editor_process_keypress :: proc() -> bool {
 
 	switch c {
 	case '\r':
-		/* TODO */
-		break
+		editor_insert_newline()
 	case CTRL_KEY('q'):
 		if E.dirty > 0 && quit_times > 0 {
 			editor_set_status_message(
