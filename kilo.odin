@@ -233,6 +233,13 @@ editor_append_row :: proc(s: string) {
 	E.dirty += 1
 }
 
+editor_del_row :: proc(at: int) {
+	if at < 0 || at >= E.numrows {return}
+	ordered_remove(&E.row, at)
+	E.numrows -= 1
+	E.dirty += 1
+}
+
 editor_row_insert_char :: proc(row: ^erow, at: int, c: rune) {
 	at := at
 	if at < 0 || at > len(row.chars) {at = len(row.chars)}
@@ -245,6 +252,12 @@ editor_row_insert_char :: proc(row: ^erow, at: int, c: rune) {
 	strings.write_string(&builder, row.chars[at:])
 
 	row.chars = strings.to_string(builder)
+	editor_update_row(row)
+	E.dirty += 1
+}
+
+editor_row_append_string :: proc(row: ^erow, s: string) {
+	row.chars = strings.concatenate({row.chars, s})
 	editor_update_row(row)
 	E.dirty += 1
 }
@@ -274,9 +287,17 @@ editor_insert_char :: proc(c: rune) {
 
 editor_del_char :: proc() {
 	if E.cy == E.numrows {return}
+	if E.cx == 0 && E.cy == 0 {return}
+
+	row := &E.row[E.cy]
 	if E.cx > 0 {
-		editor_row_del_char(&E.row[E.cy], E.cx - 1)
+		editor_row_del_char(row, E.cx - 1)
 		E.cx -= 1
+	} else {
+		E.cx = len(E.row[E.cy - 1].chars)
+		editor_row_append_string(&E.row[E.cy - 1], row.chars)
+		editor_del_row(E.cy)
+		E.cy -= 1
 	}
 }
 
