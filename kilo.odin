@@ -336,7 +336,13 @@ editor_open :: proc(filename: string) {
 }
 
 editor_save :: proc() {
-	if E.filename == "" {return}
+	if E.filename == "" {
+		E.filename = editor_prompt("Save as: %s (ESC to cancel)")
+		if (E.filename == "") {
+			editor_set_status_message("Save aborted")
+			return
+		}
+	}
 
 	builder := strings.builder_make()
 	defer strings.builder_destroy(&builder)
@@ -480,6 +486,31 @@ editor_set_status_message :: proc(sfmt: string, args: ..any) {
 }
 
 /*** input ***/
+
+editor_prompt :: proc(prompt: string) -> string {
+	builder := strings.builder_make()
+	// defer strings.builder_destroy(&builder)
+
+	for {
+		editor_set_status_message(prompt, strings.to_string(builder))
+		editor_refresh_screen()
+		c := editor_read_key()
+		if c == rune(Editor_Key.DEL_KEY) || c == CTRL_KEY('h') || c == rune(Editor_Key.BACKSPACE) {
+			strings.pop_rune(&builder)
+		} else if c == '\x1b' {
+			editor_set_status_message("")
+			return ""
+		} else if c == '\r' {
+			if strings.builder_len(builder) != 0 {
+				editor_set_status_message("")
+				return strings.to_string(builder)
+			}
+		} else if !unicode.is_control(c) && c < 128 {
+			strings.write_rune(&builder, c)
+		}
+	}
+}
+
 editor_move_cursor :: proc(key: rune) {
 	row: Maybe(string) = E.cy >= E.numrows ? nil : E.row[E.cy].chars
 
