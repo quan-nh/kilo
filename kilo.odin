@@ -219,6 +219,18 @@ editor_row_cx_to_rx :: proc(row: ^erow, cx: int) -> int {
 	return rx
 }
 
+editor_row_rx_to_cx :: proc(row: ^erow, rx: int) -> int {
+	cur_rx := 0
+	cx := 0
+	for ; cx < len(row.chars); cx += 1 {
+		if row.chars[cx] == '\t' {
+			cur_rx += (KILO_TAB_STOP - 1) - (cur_rx % KILO_TAB_STOP)}
+		cur_rx += 1
+		if cur_rx > rx {return cx}
+	}
+	return cx
+}
+
 editor_update_row :: proc(row: ^erow) {
 	row.render, _ = strings.replace_all(row.chars, "\t", strings.repeat(" ", KILO_TAB_STOP))
 }
@@ -361,6 +373,41 @@ editor_save :: proc() {
 	}
 }
 
+/*** find ***/
+
+editor_find_callback :: proc(query: string, key: rune) {
+	if key == '\r' || key == '\x1b' {
+		return
+	}
+
+	for i := 0; i < E.numrows; i += 1 {
+		row := &E.row[i]
+		if match := strings.index(row.render, query); match != -1 {
+			E.cy = i
+			E.cx = editor_row_rx_to_cx(row, match)
+			E.rowoff = E.numrows
+			break
+		}
+	}
+}
+
+editor_find :: proc() {
+	saved_cx := E.cx
+	saved_cy := E.cy
+	saved_coloff := E.coloff
+	saved_rowoff := E.rowoff
+
+	query := editor_prompt("Search: %s (ESC to cancel)", editor_find_callback)
+	if query != "" {
+		delete(query)
+	} else {
+		E.cx = saved_cx
+		E.cy = saved_cy
+		E.coloff = saved_coloff
+		E.rowoff = saved_rowoff
+	}
+}
+
 /*** output ***/
 
 write_bytes :: proc(bytes: []u8) -> c.ssize_t {
@@ -487,9 +534,8 @@ editor_set_status_message :: proc(sfmt: string, args: ..any) {
 
 /*** input ***/
 
-editor_prompt :: proc(prompt: string) -> string {
+editor_prompt :: proc(prompt: string, callback: proc(_: string, _: rune) = nil) -> string {
 	builder := strings.builder_make()
-	// defer strings.builder_destroy(&builder)
 
 	for {
 		editor_set_status_message(prompt, strings.to_string(builder))
@@ -499,14 +545,24 @@ editor_prompt :: proc(prompt: string) -> string {
 			strings.pop_rune(&builder)
 		} else if c == '\x1b' {
 			editor_set_status_message("")
+			if callback != nil {
+				callback(strings.to_string(builder), c)
+			}
 			return ""
 		} else if c == '\r' {
 			if strings.builder_len(builder) != 0 {
 				editor_set_status_message("")
+				if callback != nil {
+					callback(strings.to_string(builder), c)
+				}
 				return strings.to_string(builder)
 			}
 		} else if !unicode.is_control(c) && c < 128 {
 			strings.write_rune(&builder, c)
+		}
+
+		if callback != nil {
+			callback(strings.to_string(builder), c)
 		}
 	}
 }
@@ -576,6 +632,10 @@ editor_process_keypress :: proc() -> bool {
 			E.cx = len(E.row[E.cy].chars)
 		}
 
+
+	case CTRL_KEY('f'):
+		editor_find()
+
 	case rune(Editor_Key.BACKSPACE), CTRL_KEY('h'), rune(Editor_Key.DEL_KEY):
 		if c == rune(Editor_Key.DEL_KEY) {editor_move_cursor(rune(Editor_Key.ARROW_RIGHT))}
 		editor_del_char()
@@ -625,7 +685,7 @@ main :: proc() {
 		editor_open(os.args[1])
 	}
 
-	editor_set_status_message("HELP: Ctrl-S = save | Ctrl-Q = quit")
+	editor_set_status_message("HELP: Ctrl-S = save | Ctrl-Q = quit | Ctrl-F = find")
 
 	for {
 		editor_refresh_screen()
