@@ -376,14 +376,33 @@ editor_save :: proc() {
 /*** find ***/
 
 editor_find_callback :: proc(query: string, key: rune) {
+	@(static) last_match := -1
+	@(static) direction := 1
+
 	if key == '\r' || key == '\x1b' {
+		last_match = -1
+		direction = 1
 		return
+	} else if (key == rune(Editor_Key.ARROW_RIGHT) || key == rune(Editor_Key.ARROW_DOWN)) {
+		direction = 1
+	} else if (key == rune(Editor_Key.ARROW_LEFT) || key == rune(Editor_Key.ARROW_UP)) {
+		direction = -1
+	} else {
+		last_match = -1
+		direction = 1
 	}
 
+	if (last_match == -1) {
+		direction = 1
+	}
+	current := last_match
 	for i := 0; i < E.numrows; i += 1 {
-		row := &E.row[i]
+		current += direction
+		if current == -1 {current = E.numrows - 1} else if current == E.numrows {current = 0}
+		row := &E.row[current]
 		if match := strings.index(row.render, query); match != -1 {
-			E.cy = i
+			last_match = current
+			E.cy = current
 			E.cx = editor_row_rx_to_cx(row, match)
 			E.rowoff = E.numrows
 			break
@@ -397,7 +416,7 @@ editor_find :: proc() {
 	saved_coloff := E.coloff
 	saved_rowoff := E.rowoff
 
-	query := editor_prompt("Search: %s (ESC to cancel)", editor_find_callback)
+	query := editor_prompt("Search: %s (Use ESC/Arrows/Enter)", editor_find_callback)
 	if query != "" {
 		delete(query)
 	} else {
