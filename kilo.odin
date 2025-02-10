@@ -472,7 +472,16 @@ editor_draw_rows :: proc(ab: ^[dynamic]byte) {
 			len := len(E.row[filerow].render) - E.coloff
 			if len < 0 {len = 0}
 			if len > E.screencols {len = E.screencols}
-			append(ab, ..transmute([]u8)E.row[filerow].render[E.coloff:E.coloff + len])
+			c := E.row[filerow].render[E.coloff:]
+			for j := 0; j < len; j += 1 {
+				if unicode.is_digit(rune(c[j])) {
+					append(ab, 0x1b, '[', '3', '1', 'm')
+					append(ab, c[j])
+					append(ab, 0x1b, '[', '3', '9', 'm')
+				} else {
+					append(ab, c[j])
+				}
+			}
 		}
 
 		append(ab, 0x1b, '[', 'K')
