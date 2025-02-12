@@ -30,11 +30,18 @@ Editor_Key :: enum {
 	PAGE_UP,
 	PAGE_DOWN,
 }
+
+Editor_Highlight :: enum u8 {
+	HL_NORMAL = 0,
+	HL_NUMBER,
+}
+
 /*** data ***/
 
 erow :: struct {
 	chars:  string,
 	render: string,
+	hl:     []Editor_Highlight,
 }
 editor_config :: struct {
 	cx:             int,
@@ -208,6 +215,31 @@ get_window_size :: proc(rows: ^int, cols: ^int) -> int {
 	}
 }
 
+/*** syntax highlighting ***/
+
+editor_update_syntax :: proc(row: ^erow) {
+	row.hl = make([]Editor_Highlight, len(row.render))
+
+	// Fill with normal highlighting by default
+	for i := 0; i < len(row.render); i += 1 {
+		row.hl[i] = .HL_NORMAL
+	}
+
+	for i := 0; i < len(row.render); i += 1 {
+		if unicode.is_digit(rune(row.render[i])) {
+			row.hl[i] = .HL_NUMBER
+		}
+	}
+}
+
+editor_syntax_to_color :: proc(hl: Editor_Highlight) -> int {
+	#partial switch hl {
+	case .HL_NUMBER:
+		return 31
+	}
+	return 37
+}
+
 /*** row operations ***/
 editor_row_cx_to_rx :: proc(row: ^erow, cx: int) -> int {
 	rx := 0
@@ -233,6 +265,7 @@ editor_row_rx_to_cx :: proc(row: ^erow, rx: int) -> int {
 
 editor_update_row :: proc(row: ^erow) {
 	row.render, _ = strings.replace_all(row.chars, "\t", strings.repeat(" ", KILO_TAB_STOP))
+	editor_update_syntax(row)
 }
 
 editor_insert_row :: proc(at: int, s: string) {
@@ -473,15 +506,26 @@ editor_draw_rows :: proc(ab: ^[dynamic]byte) {
 			if len < 0 {len = 0}
 			if len > E.screencols {len = E.screencols}
 			c := E.row[filerow].render[E.coloff:]
+			hl := E.row[filerow].hl[E.coloff:]
+			current_color := -1
 			for j := 0; j < len; j += 1 {
-				if unicode.is_digit(rune(c[j])) {
-					append(ab, 0x1b, '[', '3', '1', 'm')
+				if (hl[j] == .HL_NORMAL) {
+					if (current_color != -1) {
+						append(ab, 0x1b, '[', '3', '9', 'm')
+						current_color = -1
+					}
 					append(ab, c[j])
-					append(ab, 0x1b, '[', '3', '9', 'm')
 				} else {
+					color := editor_syntax_to_color(hl[j])
+					if (color != current_color) {
+						current_color = color
+						buf := fmt.aprintf("\x1b[%dm", color)
+						append(ab, ..transmute([]u8)buf)
+					}
 					append(ab, c[j])
 				}
 			}
+			append(ab, 0x1b, '[', '3', '9', 'm')
 		}
 
 		append(ab, 0x1b, '[', 'K')
