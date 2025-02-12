@@ -34,6 +34,7 @@ Editor_Key :: enum {
 Editor_Highlight :: enum u8 {
 	HL_NORMAL = 0,
 	HL_NUMBER,
+	HL_MATCH,
 }
 
 /*** data ***/
@@ -236,6 +237,8 @@ editor_syntax_to_color :: proc(hl: Editor_Highlight) -> int {
 	#partial switch hl {
 	case .HL_NUMBER:
 		return 31
+	case .HL_MATCH:
+		return 34
 	}
 	return 37
 }
@@ -412,6 +415,13 @@ editor_find_callback :: proc(query: string, key: rune) {
 	@(static) last_match := -1
 	@(static) direction := 1
 
+	@(static) saved_hl_line: int
+	@(static) saved_hl: []Editor_Highlight
+
+	if saved_hl != nil {
+		E.row[saved_hl_line].hl = saved_hl
+		saved_hl = nil
+	}
 	if key == '\r' || key == '\x1b' {
 		last_match = -1
 		direction = 1
@@ -438,6 +448,11 @@ editor_find_callback :: proc(query: string, key: rune) {
 			E.cy = current
 			E.cx = editor_row_rx_to_cx(row, match)
 			E.rowoff = E.numrows
+			saved_hl_line = current
+			saved_hl = row.hl
+			for j := 0; j < len(query); j += 1 {
+				row.hl[match + j] = .HL_MATCH
+			}
 			break
 		}
 	}
