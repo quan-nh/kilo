@@ -218,17 +218,28 @@ get_window_size :: proc(rows: ^int, cols: ^int) -> int {
 
 /*** syntax highlighting ***/
 
+is_separator :: proc(c: rune) -> bool {
+	separators := ",.()+-/*=~%<>[];"
+	return unicode.is_space(c) || c == 0 || strings.contains_rune(separators, c)
+}
+
 editor_update_syntax :: proc(row: ^erow) {
 	row.hl = make([]Editor_Highlight, len(row.render))
-
 	// Fill with normal highlighting by default
 	for i := 0; i < len(row.render); i += 1 {
 		row.hl[i] = .HL_NORMAL
 	}
 
+	prev_sep := true
 	for i := 0; i < len(row.render); i += 1 {
-		if unicode.is_digit(rune(row.render[i])) {
+		c := rune(row.render[i])
+		prev_hl := i > 0 ? row.hl[i - 1] : .HL_NORMAL
+		if (unicode.is_digit(c) && (prev_sep || prev_hl == .HL_NUMBER)) ||
+		   (c == '.' && prev_hl == .HL_NUMBER) {
 			row.hl[i] = .HL_NUMBER
+			prev_sep = false
+		} else {
+			prev_sep = is_separator(rune(row.render[i]))
 		}
 	}
 }
