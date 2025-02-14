@@ -37,6 +37,8 @@ Editor_Key :: enum {
 Editor_Highlight :: enum u8 {
 	HL_NORMAL = 0,
 	HL_COMMENT,
+	HL_KEYWORD1,
+	HL_KEYWORD2,
 	HL_STRING,
 	HL_NUMBER,
 	HL_MATCH,
@@ -46,6 +48,7 @@ Editor_Highlight :: enum u8 {
 Editor_Syntax :: struct {
 	filetype:                 string,
 	filematch:                []string,
+	keywords:                 []string,
 	singleline_comment_start: string,
 	flags:                    u32,
 }
@@ -78,10 +81,69 @@ E: editor_config
 /*** filetypes ***/
 
 C_HL_extensions := []string{".c", ".h", ".cpp"}
-ODIN_HL_extensions := []string{".odin"}
+C_HL_keywords := []string {
+	"switch",
+	"if",
+	"while",
+	"for",
+	"break",
+	"continue",
+	"return",
+	"else",
+	"struct",
+	"union",
+	"typedef",
+	"static",
+	"enum",
+	"class",
+	"case",
+	"int|",
+	"long|",
+	"double|",
+	"float|",
+	"char|",
+	"unsigned|",
+	"signed|",
+	"void|",
+}
+
+Odin_HL_extensions := []string{".odin"}
+Odin_HL_keywords := []string {
+	"switch",
+	"if",
+	"for",
+	"break",
+	"continue",
+	"return",
+	"else",
+	"struct",
+	"union",
+	"enum",
+	"case",
+	"bool|",
+	"byte|",
+	"int|",
+	"i8|",
+	"i16|",
+	"i32|",
+	"i64|",
+	"u8|",
+	"u16|",
+	"u32|",
+	"u64|",
+	"rune|",
+	"string|",
+}
+
 HLDB := []Editor_Syntax {
-	{"c", C_HL_extensions, "//", HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS},
-	{"odin", ODIN_HL_extensions, "//", HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS},
+	{"c", C_HL_extensions, C_HL_keywords, "//", HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS},
+	{
+		"odin",
+		Odin_HL_extensions,
+		Odin_HL_keywords,
+		"//",
+		HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS,
+	},
 }
 
 /*** terminal ***/
@@ -253,6 +315,8 @@ editor_update_syntax :: proc(row: ^erow) {
 
 	if E.syntax.filetype == "" do return
 
+	keywords := E.syntax.keywords
+
 	scs := E.syntax.singleline_comment_start
 	scs_len := len(scs)
 
@@ -307,6 +371,28 @@ editor_update_syntax :: proc(row: ^erow) {
 			}
 		}
 
+		if prev_sep {
+			for keyword in keywords {
+				klen := len(keyword)
+				kw2 := keyword[klen - 1] == '|'
+				if kw2 {klen -= 1}
+
+				if i + klen > len(row.render) - 1 do continue
+
+				if row.render[i:i + klen] == keyword[:klen] &&
+				   is_separator(rune(row.render[i + klen])) {
+					for j := 0; j < klen; j += 1 {
+						row.hl[i + j] = kw2 ? .HL_KEYWORD2 : .HL_KEYWORD1
+					}
+					i += klen
+					break
+				}
+			}
+
+			prev_sep = false
+			continue
+		}
+
 		prev_sep = is_separator(c)
 		i += 1
 	}
@@ -316,6 +402,10 @@ editor_syntax_to_color :: proc(hl: Editor_Highlight) -> int {
 	#partial switch hl {
 	case .HL_COMMENT:
 		return 36
+	case .HL_KEYWORD1:
+		return 33
+	case .HL_KEYWORD2:
+		return 32
 	case .HL_NUMBER:
 		return 31
 	case .HL_STRING:
