@@ -15,6 +15,7 @@ KILO_TAB_STOP :: 8
 KILO_QUIT_TIMES :: 3
 
 HL_HIGHLIGHT_NUMBERS :: 1 << 0
+HL_HIGHLIGHT_STRINGS :: 1 << 1
 
 CTRL_KEY :: proc(k: rune) -> rune {
 	return rune(byte(k) & 0x1f)
@@ -35,6 +36,7 @@ Editor_Key :: enum {
 
 Editor_Highlight :: enum u8 {
 	HL_NORMAL = 0,
+	HL_STRING,
 	HL_NUMBER,
 	HL_MATCH,
 }
@@ -76,8 +78,8 @@ E: editor_config
 C_HL_extensions := []string{".c", ".h", ".cpp"}
 ODIN_HL_extensions := []string{".odin"}
 HLDB := []Editor_Syntax {
-	{"c", C_HL_extensions, HL_HIGHLIGHT_NUMBERS},
-	{"odin", ODIN_HL_extensions, HL_HIGHLIGHT_NUMBERS},
+	{"c", C_HL_extensions, HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS},
+	{"odin", ODIN_HL_extensions, HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS},
 }
 
 /*** terminal ***/
@@ -250,19 +252,48 @@ editor_update_syntax :: proc(row: ^erow) {
 	if E.syntax.filetype == "" do return
 
 	prev_sep := true
-	for i := 0; i < len(row.render); i += 1 {
+	in_string: rune = 0
+	i := 0
+	for i < len(row.render) {
 		c := rune(row.render[i])
 		prev_hl := i > 0 ? row.hl[i - 1] : .HL_NORMAL
+
+		if E.syntax.flags & HL_HIGHLIGHT_STRINGS != 0 {
+			if in_string != 0 {
+				row.hl[i] = .HL_STRING
+				if c == '\\' && i + 1 < len(row.render) {
+					row.hl[i + 1] = .HL_STRING
+					i += 2
+					continue
+				}
+				if c == in_string {
+					in_string = 0
+				}
+				i += 1
+				prev_sep = true
+				continue
+			} else {
+				if c == '"' || c == '\'' {
+					in_string = c
+					row.hl[i] = .HL_STRING
+					i += 1
+					continue
+				}
+			}
+		}
 
 		if E.syntax.flags & HL_HIGHLIGHT_NUMBERS != 0 {
 			if (unicode.is_digit(c) && (prev_sep || prev_hl == .HL_NUMBER)) ||
 			   (c == '.' && prev_hl == .HL_NUMBER) {
 				row.hl[i] = .HL_NUMBER
+				i += 1
 				prev_sep = false
-			} else {
-				prev_sep = is_separator(rune(row.render[i]))
+				continue
 			}
 		}
+
+		prev_sep = is_separator(c)
+		i += 1
 	}
 }
 
@@ -270,6 +301,8 @@ editor_syntax_to_color :: proc(hl: Editor_Highlight) -> int {
 	#partial switch hl {
 	case .HL_NUMBER:
 		return 31
+	case .HL_STRING:
+		return 35
 	case .HL_MATCH:
 		return 34
 	}
