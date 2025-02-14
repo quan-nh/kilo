@@ -36,6 +36,7 @@ Editor_Key :: enum {
 
 Editor_Highlight :: enum u8 {
 	HL_NORMAL = 0,
+	HL_COMMENT,
 	HL_STRING,
 	HL_NUMBER,
 	HL_MATCH,
@@ -43,9 +44,10 @@ Editor_Highlight :: enum u8 {
 
 /*** data ***/
 Editor_Syntax :: struct {
-	filetype:  string,
-	filematch: []string,
-	flags:     u32,
+	filetype:                 string,
+	filematch:                []string,
+	singleline_comment_start: string,
+	flags:                    u32,
 }
 
 erow :: struct {
@@ -78,8 +80,8 @@ E: editor_config
 C_HL_extensions := []string{".c", ".h", ".cpp"}
 ODIN_HL_extensions := []string{".odin"}
 HLDB := []Editor_Syntax {
-	{"c", C_HL_extensions, HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS},
-	{"odin", ODIN_HL_extensions, HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS},
+	{"c", C_HL_extensions, "//", HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS},
+	{"odin", ODIN_HL_extensions, "//", HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS},
 }
 
 /*** terminal ***/
@@ -251,12 +253,25 @@ editor_update_syntax :: proc(row: ^erow) {
 
 	if E.syntax.filetype == "" do return
 
+	scs := E.syntax.singleline_comment_start
+	scs_len := len(scs)
+
 	prev_sep := true
 	in_string: rune = 0
 	i := 0
 	for i < len(row.render) {
 		c := rune(row.render[i])
 		prev_hl := i > 0 ? row.hl[i - 1] : .HL_NORMAL
+
+		if scs_len > 0 && in_string == 0 {
+			if i + scs_len <= len(row.render) && row.render[i:i + scs_len] == scs {
+				// Fill the rest of the line with comment highlighting
+				for j := i; j < len(row.render); j += 1 {
+					row.hl[j] = .HL_COMMENT
+				}
+				break
+			}
+		}
 
 		if E.syntax.flags & HL_HIGHLIGHT_STRINGS != 0 {
 			if in_string != 0 {
@@ -299,6 +314,8 @@ editor_update_syntax :: proc(row: ^erow) {
 
 editor_syntax_to_color :: proc(hl: Editor_Highlight) -> int {
 	#partial switch hl {
+	case .HL_COMMENT:
+		return 36
 	case .HL_NUMBER:
 		return 31
 	case .HL_STRING:
