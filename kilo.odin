@@ -14,6 +14,8 @@ KILO_VERSION :: "0.0.1"
 KILO_TAB_STOP :: 8
 KILO_QUIT_TIMES :: 3
 
+HL_HIGHLIGHT_NUMBERS :: 1 << 0
+
 CTRL_KEY :: proc(k: rune) -> rune {
 	return rune(byte(k) & 0x1f)
 }
@@ -38,6 +40,11 @@ Editor_Highlight :: enum u8 {
 }
 
 /*** data ***/
+Editor_Syntax :: struct {
+	filetype:  string,
+	filematch: []string,
+	flags:     u32,
+}
 
 erow :: struct {
 	chars:  string,
@@ -58,10 +65,20 @@ editor_config :: struct {
 	filename:       string,
 	statusmsg:      string,
 	statusmsg_time: i64,
+	syntax:         Editor_Syntax,
 	orig_termios:   posix.termios,
 }
 
 E: editor_config
+
+/*** filetypes ***/
+
+C_HL_extensions := []string{".c", ".h", ".cpp"}
+ODIN_HL_extensions := []string{".odin"}
+HLDB := []Editor_Syntax {
+	{"c", C_HL_extensions, HL_HIGHLIGHT_NUMBERS},
+	{"odin", ODIN_HL_extensions, HL_HIGHLIGHT_NUMBERS},
+}
 
 /*** terminal ***/
 
@@ -230,16 +247,21 @@ editor_update_syntax :: proc(row: ^erow) {
 		row.hl[i] = .HL_NORMAL
 	}
 
+	if E.syntax.filetype == "" do return
+
 	prev_sep := true
 	for i := 0; i < len(row.render); i += 1 {
 		c := rune(row.render[i])
 		prev_hl := i > 0 ? row.hl[i - 1] : .HL_NORMAL
-		if (unicode.is_digit(c) && (prev_sep || prev_hl == .HL_NUMBER)) ||
-		   (c == '.' && prev_hl == .HL_NUMBER) {
-			row.hl[i] = .HL_NUMBER
-			prev_sep = false
-		} else {
-			prev_sep = is_separator(rune(row.render[i]))
+
+		if E.syntax.flags & HL_HIGHLIGHT_NUMBERS != 0 {
+			if (unicode.is_digit(c) && (prev_sep || prev_hl == .HL_NUMBER)) ||
+			   (c == '.' && prev_hl == .HL_NUMBER) {
+				row.hl[i] = .HL_NUMBER
+				prev_sep = false
+			} else {
+				prev_sep = is_separator(rune(row.render[i]))
+			}
 		}
 	}
 }
@@ -252,6 +274,26 @@ editor_syntax_to_color :: proc(hl: Editor_Highlight) -> int {
 		return 34
 	}
 	return 37
+}
+
+editor_select_syntax_highlight :: proc() {
+	if E.filename == "" do return
+	ext := strings.last_index_byte(E.filename, '.')
+	for s in HLDB {
+		for pattern in s.filematch {
+			is_ext := pattern[0] == '.'
+			if (is_ext && ext >= 0 && E.filename[ext:] == pattern) ||
+			   (!is_ext && strings.contains(E.filename, pattern)) {
+				E.syntax = s
+
+				for filerow := 0; filerow < E.numrows; filerow += 1 {
+					editor_update_syntax(&E.row[filerow])
+				}
+
+				return
+			}
+		}
+	}
 }
 
 /*** row operations ***/
@@ -380,6 +422,8 @@ editor_del_char :: proc() {
 editor_open :: proc(filename: string) {
 	E.filename = filename
 
+	editor_select_syntax_highlight()
+
 	data, ok := os.read_entire_file(filename)
 	if !ok {
 		// could not read file
@@ -401,6 +445,7 @@ editor_save :: proc() {
 			editor_set_status_message("Save aborted")
 			return
 		}
+		editor_select_syntax_highlight()
 	}
 
 	builder := strings.builder_make()
@@ -575,7 +620,15 @@ editor_draw_status_bar :: proc(ab: ^[dynamic]byte) {
 			E.dirty > 0 ? "(modified)" : "",
 		),
 	)
-	rlen := len(fmt.bprintf(rstatus, "%d/%d", E.cy + 1, E.numrows))
+	rlen := len(
+		fmt.bprintf(
+			rstatus,
+			"%s | %d/%d",
+			E.syntax.filetype != "" ? E.syntax.filetype : "no ft",
+			E.cy + 1,
+			E.numrows,
+		),
+	)
 	if slen > E.screencols {slen = E.screencols}
 	append(ab, ..status[:slen])
 
