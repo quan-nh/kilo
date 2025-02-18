@@ -9,6 +9,10 @@ import "core:sys/posix"
 import "core:time"
 import "core:unicode"
 
+/*
+test
+*/
+
 /*** defines ***/
 KILO_VERSION :: "0.0.1"
 KILO_TAB_STOP :: 8
@@ -57,9 +61,11 @@ Editor_Syntax :: struct {
 }
 
 erow :: struct {
-	chars:  string,
-	render: string,
-	hl:     []Editor_Highlight,
+	idx:             int,
+	chars:           string,
+	render:          string,
+	hl:              []Editor_Highlight,
+	hl_open_comment: bool,
 }
 editor_config :: struct {
 	cx:             int,
@@ -340,7 +346,7 @@ editor_update_syntax :: proc(row: ^erow) {
 
 	prev_sep := true
 	in_string: rune = 0
-	in_comment := false
+	in_comment := row.idx > 0 && E.row[row.idx - 1].hl_open_comment
 
 	i := 0
 	for i < len(row.render) {
@@ -360,7 +366,7 @@ editor_update_syntax :: proc(row: ^erow) {
 		if mcs_len > 0 && mce_len > 0 && in_string == 0 {
 			if in_comment {
 				row.hl[i] = .HL_MLCOMMENT
-				if row.render[i:i + mce_len] == mce {
+				if i + mce_len <= len(row.render) && row.render[i:i + mce_len] == mce {
 					for j := 0; j < mce_len; j += 1 {
 						row.hl[i + j] = .HL_MLCOMMENT
 					}
@@ -440,6 +446,12 @@ editor_update_syntax :: proc(row: ^erow) {
 		prev_sep = is_separator(c)
 		i += 1
 	}
+
+	changed := row.hl_open_comment != in_comment
+	row.hl_open_comment = in_comment
+	if changed && row.idx + 1 < E.numrows {
+		editor_update_syntax(&E.row[row.idx + 1])
+	}
 }
 
 editor_syntax_to_color :: proc(hl: Editor_Highlight) -> int {
@@ -511,7 +523,12 @@ editor_update_row :: proc(row: ^erow) {
 editor_insert_row :: proc(at: int, s: string) {
 	if at < 0 || at > E.numrows {return}
 
+	for j := at + 1; j <= E.numrows; j += 1 {
+		E.row[j].idx += 1
+	}
+
 	row := erow {
+		idx   = at,
 		chars = s,
 	}
 	editor_update_row(&row)
@@ -523,6 +540,10 @@ editor_insert_row :: proc(at: int, s: string) {
 editor_del_row :: proc(at: int) {
 	if at < 0 || at >= E.numrows {return}
 	ordered_remove(&E.row, at)
+	for j := at; j < E.numrows - 1; j += 1 {
+		E.row[j].idx -= 1
+	}
+
 	E.numrows -= 1
 	E.dirty += 1
 }
