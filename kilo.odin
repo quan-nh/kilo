@@ -37,6 +37,7 @@ Editor_Key :: enum {
 Editor_Highlight :: enum u8 {
 	HL_NORMAL = 0,
 	HL_COMMENT,
+	HL_MLCOMMENT,
 	HL_KEYWORD1,
 	HL_KEYWORD2,
 	HL_STRING,
@@ -50,6 +51,8 @@ Editor_Syntax :: struct {
 	filematch:                []string,
 	keywords:                 []string,
 	singleline_comment_start: string,
+	multiline_comment_start:  string,
+	multiline_comment_end:    string,
 	flags:                    u32,
 }
 
@@ -136,12 +139,22 @@ Odin_HL_keywords := []string {
 }
 
 HLDB := []Editor_Syntax {
-	{"c", C_HL_extensions, C_HL_keywords, "//", HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS},
+	{
+		"c",
+		C_HL_extensions,
+		C_HL_keywords,
+		"//",
+		"/*",
+		"*/",
+		HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS,
+	},
 	{
 		"odin",
 		Odin_HL_extensions,
 		Odin_HL_keywords,
 		"//",
+		"/*",
+		"*/",
 		HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS,
 	},
 }
@@ -318,22 +331,53 @@ editor_update_syntax :: proc(row: ^erow) {
 	keywords := E.syntax.keywords
 
 	scs := E.syntax.singleline_comment_start
+	mcs := E.syntax.multiline_comment_start
+	mce := E.syntax.multiline_comment_end
+
 	scs_len := len(scs)
+	mcs_len := len(mcs)
+	mce_len := len(mce)
 
 	prev_sep := true
 	in_string: rune = 0
+	in_comment := false
+
 	i := 0
 	for i < len(row.render) {
 		c := rune(row.render[i])
 		prev_hl := i > 0 ? row.hl[i - 1] : .HL_NORMAL
 
-		if scs_len > 0 && in_string == 0 {
+		if scs_len > 0 && in_string == 0 && !in_comment {
 			if i + scs_len <= len(row.render) && row.render[i:i + scs_len] == scs {
 				// Fill the rest of the line with comment highlighting
 				for j := i; j < len(row.render); j += 1 {
 					row.hl[j] = .HL_COMMENT
 				}
 				break
+			}
+		}
+
+		if mcs_len > 0 && mce_len > 0 && in_string == 0 {
+			if in_comment {
+				row.hl[i] = .HL_MLCOMMENT
+				if row.render[i:i + mce_len] == mce {
+					for j := 0; j < mce_len; j += 1 {
+						row.hl[i + j] = .HL_MLCOMMENT
+					}
+					in_comment = false
+					prev_sep = true
+					continue
+				} else {
+					i += 1
+					continue
+				}
+			} else if i + mcs_len <= len(row.render) && row.render[i:i + mcs_len] == mcs {
+				for j := 0; j < mcs_len; j += 1 {
+					row.hl[i + j] = .HL_MLCOMMENT
+				}
+				i += mcs_len
+				in_comment = true
+				continue
 			}
 		}
 
@@ -400,7 +444,7 @@ editor_update_syntax :: proc(row: ^erow) {
 
 editor_syntax_to_color :: proc(hl: Editor_Highlight) -> int {
 	#partial switch hl {
-	case .HL_COMMENT:
+	case .HL_COMMENT, .HL_MLCOMMENT:
 		return 36
 	case .HL_KEYWORD1:
 		return 33
