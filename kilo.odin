@@ -720,7 +720,16 @@ editor_draw_rows :: proc(ab: ^[dynamic]byte) {
 			hl := E.row[filerow].hl[E.coloff:]
 			current_color := -1
 			for j := 0; j < len; j += 1 {
-				if (hl[j] == .HL_NORMAL) {
+				if unicode.is_control(rune(c[j])) {
+					sym := c[j] <= 26 ? '@' + c[j] : '?'
+					append(ab, 0x1b, '[', '7', 'm')
+					append(ab, sym)
+					append(ab, 0x1b, '[', 'm')
+					if (current_color != -1) {
+						buf := fmt.aprintf("\x1b[%dm", current_color)
+						append(ab, ..transmute([]u8)buf)
+					}
+				} else if (hl[j] == .HL_NORMAL) {
 					if (current_color != -1) {
 						append(ab, 0x1b, '[', '3', '9', 'm')
 						current_color = -1
