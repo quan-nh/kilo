@@ -1,10 +1,19 @@
 #import "Basic";
 #import "POSIX";
+#load "termios_bindings.jai";
+
+enableRawMode :: () {
+    raw: termios;
+    tcgetattr(STDIN_FILENO, *raw);
+    raw.c_lflag &= ~(ECHO);
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, *raw);
+}
 
 main :: () {
+    enableRawMode();
+
     c: u8;
-    // read returns s64 (ssize_t). It returns 1 on success, 0 on EOF, and -1 on error.
     while read(STDIN_FILENO, *c, 1) == 1 && c != #char "q" {
-        // Loop body (if any)
+        // Just reading
     }
 }
