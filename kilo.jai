@@ -4,12 +4,20 @@
 
 orig_termios: termios;
 
+die :: (s: string) {
+    // In Jai, we use temp_c_string to convert a Jai string 
+    // to a null-terminated *u8 for C functions like perror.
+    perror(temp_c_string(s));
+    exit(1);
+}
+
 disable_raw_mode :: () {
-  tcsetattr(STDIN_FILENO, TCSAFLUSH, *orig_termios);
+  if tcsetattr(STDIN_FILENO, TCSAFLUSH, *orig_termios) == -1
+    die("tcsetattr");
 }
 
 enable_raw_mode :: () {
-    tcgetattr(STDIN_FILENO, *orig_termios);
+    if tcgetattr(STDIN_FILENO, *orig_termios) == -1 die("tcgetattr");
     
     raw := orig_termios;
     raw.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
@@ -19,7 +27,7 @@ enable_raw_mode :: () {
     raw.c_cc[VMIN] = 0;
     raw.c_cc[VTIME] = 1;
     
-    tcsetattr(STDIN_FILENO, TCSAFLUSH, *raw);
+    if tcsetattr(STDIN_FILENO, TCSAFLUSH, *raw) == -1 die("tcgetattr");
 }
 
 main :: () {
@@ -30,7 +38,7 @@ main :: () {
         c: u8 = 0;
             
         // read(fd, buffer_ptr, count)
-        read(STDIN_FILENO, *c, 1);
+        if read(STDIN_FILENO, *c, 1) == -1 && errno() != EAGAIN die("read");
     
         // iscntrl(c) check (0-31 and 127)
         if c < 32 || c == 127 {
