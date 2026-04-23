@@ -2,7 +2,17 @@
 #import "POSIX";
 #load "termios_bindings.jai";
 
+/*** defines ***/
+
+CTRL_KEY :: inline (k: u8) -> u8 {
+    return k & 0x1f;
+}
+
+/*** data ***/
+
 orig_termios: termios;
+
+/*** terminal ***/
 
 die :: (s: string) {
     // In Jai, we use temp_c_string to convert a Jai string 
@@ -30,6 +40,8 @@ enable_raw_mode :: () {
     if tcsetattr(STDIN_FILENO, TCSAFLUSH, *raw) == -1 die("tcgetattr");
 }
 
+/*** init ***/
+
 main :: () {
     enable_raw_mode();
     defer disable_raw_mode();
@@ -50,6 +62,6 @@ main :: () {
             print("% ('%')\r\n", c, char_str);
         }
     
-        if c == #char "q" break;
+        if c == CTRL_KEY(113) break;
     }
 }
