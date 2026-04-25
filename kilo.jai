@@ -40,6 +40,28 @@ enable_raw_mode :: () {
     if tcsetattr(STDIN_FILENO, TCSAFLUSH, *raw) == -1 die("tcgetattr");
 }
 
+editor_read_key :: () -> u8 {
+  nread: int;
+  c: u8;
+  while true {
+    nread = read(STDIN_FILENO, *c, 1);
+    if nread == 1 break;
+    if nread == -1 && errno() != EAGAIN die("read");
+  }
+  return c;
+}
+
+/*** input ***/
+
+editor_process_keypress :: () {
+    c := editor_read_key();
+
+    if c == {
+        case #run CTRL_KEY(#char "q");
+            exit(0);
+    }
+}
+
 /*** init ***/
 
 main :: () {
@@ -47,21 +69,6 @@ main :: () {
     defer disable_raw_mode();
 
     while true {
-        c: u8 = 0;
-            
-        // read(fd, buffer_ptr, count)
-        if read(STDIN_FILENO, *c, 1) == -1 && errno() != EAGAIN die("read");
-    
-        // iscntrl(c) check (0-31 and 127)
-        if c < 32 || c == 127 {
-            print("%\r\n", c);
-        } else {
-            // Jai's print treats u8 as a number. 
-            // to_string(*c, 1) creates a string view to print it as a character.
-            char_str := to_string(*c, 1);
-            print("% ('%')\r\n", c, char_str);
-        }
-    
-        if c == CTRL_KEY(113) break;
+        editor_process_keypress();
     }
 }
