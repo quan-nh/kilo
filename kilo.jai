@@ -56,8 +56,17 @@ editor_read_key :: () -> u8 {
 
 /*** output ***/
 
+editor_draw_rows :: () {
+  for 0..23 {
+    write(STDOUT_FILENO, "~\r\n".data, 3);
+  }
+}
+
 editor_refresh_screen :: () {
   write(STDOUT_FILENO, "\x1b[2J".data, 4);
+  write(STDOUT_FILENO, "\x1b[H".data, 3);
+  
+  editor_draw_rows();
   write(STDOUT_FILENO, "\x1b[H".data, 3);
 }
 
