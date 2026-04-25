@@ -15,6 +15,9 @@ orig_termios: termios;
 /*** terminal ***/
 
 die :: (s: string) {
+    write(STDOUT_FILENO, "\x1b[2J".data, 4);
+    write(STDOUT_FILENO, "\x1b[H".data, 3);
+    
     // In Jai, we use temp_c_string to convert a Jai string 
     // to a null-terminated *u8 for C functions like perror.
     perror(temp_c_string(s));
@@ -51,6 +54,13 @@ editor_read_key :: () -> u8 {
   return c;
 }
 
+/*** output ***/
+
+editor_refresh_screen :: () {
+  write(STDOUT_FILENO, "\x1b[2J".data, 4);
+  write(STDOUT_FILENO, "\x1b[H".data, 3);
+}
+
 /*** input ***/
 
 editor_process_keypress :: () {
@@ -58,7 +68,9 @@ editor_process_keypress :: () {
 
     if c == {
         case #run CTRL_KEY(#char "q");
-            exit(0);
+          write(STDOUT_FILENO, "\x1b[2J".data, 4);
+          write(STDOUT_FILENO, "\x1b[H".data, 3);
+          exit(0);
     }
 }
 
@@ -69,6 +81,7 @@ main :: () {
     defer disable_raw_mode();
 
     while true {
+        editor_refresh_screen();
         editor_process_keypress();
     }
 }
