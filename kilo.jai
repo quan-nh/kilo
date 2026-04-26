@@ -10,36 +10,40 @@ CTRL_KEY :: inline (k: u8) -> u8 {
 
 /*** data ***/
 
-orig_termios: termios;
+editor_config :: struct {
+  orig_termios: termios;
+};
+
+E: editor_config;
 
 /*** terminal ***/
 
 die :: (s: string) {
     write(STDOUT_FILENO, "\x1b[2J".data, 4);
     write(STDOUT_FILENO, "\x1b[H".data, 3);
-    
-    // In Jai, we use temp_c_string to convert a Jai string 
+
+    // In Jai, we use temp_c_string to convert a Jai string
     // to a null-terminated *u8 for C functions like perror.
     perror(temp_c_string(s));
     exit(1);
 }
 
 disable_raw_mode :: () {
-  if tcsetattr(STDIN_FILENO, TCSAFLUSH, *orig_termios) == -1
+  if tcsetattr(STDIN_FILENO, TCSAFLUSH, *E.orig_termios) == -1
     die("tcsetattr");
 }
 
 enable_raw_mode :: () {
-    if tcgetattr(STDIN_FILENO, *orig_termios) == -1 die("tcgetattr");
-    
-    raw := orig_termios;
+    if tcgetattr(STDIN_FILENO, *E.orig_termios) == -1 die("tcgetattr");
+
+    raw := E.orig_termios;
     raw.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
     raw.c_oflag &= ~(OPOST);
     raw.c_cflag |= (CS8);
     raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
     raw.c_cc[VMIN] = 0;
     raw.c_cc[VTIME] = 1;
-    
+
     if tcsetattr(STDIN_FILENO, TCSAFLUSH, *raw) == -1 die("tcgetattr");
 }
 
@@ -65,7 +69,7 @@ editor_draw_rows :: () {
 editor_refresh_screen :: () {
   write(STDOUT_FILENO, "\x1b[2J".data, 4);
   write(STDOUT_FILENO, "\x1b[H".data, 3);
-  
+
   editor_draw_rows();
   write(STDOUT_FILENO, "\x1b[H".data, 3);
 }
