@@ -11,10 +11,19 @@ CTRL_KEY :: inline (k: u8) -> u8 {
 /*** data ***/
 
 editor_config :: struct {
+  screenrows: int;
+  screencols: int;
   orig_termios: termios;
 };
 
 E: editor_config;
+
+winsize :: struct {
+    ws_row:    u16;
+    ws_col:    u16;
+    ws_xpixel: u16; // unused
+    ws_ypixel: u16; // unused
+}
 
 /*** terminal ***/
 
@@ -58,10 +67,27 @@ editor_read_key :: () -> u8 {
   return c;
 }
 
+get_window_size :: (rows: *int, cols: *int) -> s32 {
+    ws: winsize;
+
+    // TIOCGWINSZ constant varies by platform.
+    // Linux: 0x5413
+    // macOS: 0x40087468
+    TIOCGWINSZ : u64 : #ifx OS == .MACOS then 0x40087468 else 0x5413;
+
+    if ioctl(STDOUT_FILENO, TIOCGWINSZ, *ws) == -1 || ws.ws_col == 0 {
+        return -1;
+    }
+
+    cols.* = cast(int) ws.ws_col;
+    rows.* = cast(int) ws.ws_row;
+    return 0;
+}
+
 /*** output ***/
 
 editor_draw_rows :: () {
-  for 0..23 {
+  for 1..E.screenrows {
     write(STDOUT_FILENO, "~\r\n".data, 3);
   }
 }
@@ -89,9 +115,14 @@ editor_process_keypress :: () {
 
 /*** init ***/
 
+init_editor :: () {
+  if get_window_size(*E.screenrows, *E.screencols) == -1 die("getWindowSize");
+}
+
 main :: () {
     enable_raw_mode();
     defer disable_raw_mode();
+    init_editor();
 
     while true {
         editor_refresh_screen();
