@@ -108,8 +108,12 @@ get_window_size :: (rows: *int, cols: *int) -> int {
 /*** output ***/
 
 editor_draw_rows :: () {
-  for 1..E.screenrows {
-    write(STDOUT_FILENO, "~\r\n".data, 3);
+  for 0..E.screenrows-1 {
+    write(STDOUT_FILENO, "~".data, 1);
+    
+    if it < E.screenrows - 1 {
+      write(STDOUT_FILENO, "\r\n".data, 2);
+    }
   }
 }
 
