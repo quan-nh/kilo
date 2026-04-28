@@ -4,6 +4,8 @@
 
 /*** defines ***/
 
+KILO_VERSION :: "0.0.1";
+
 CTRL_KEY :: inline (k: u8) -> u8 {
     return k & 0x1f;
 }
@@ -111,7 +113,25 @@ get_window_size :: (rows: *int, cols: *int) -> int {
 
 editor_draw_rows :: (builder: *String_Builder) {
   for y: 0..E.screenrows-1 {
-    append(builder, "~");
+    if y == E.screenrows / 3 {
+        welcome := tprint("Kilo editor -- version %", KILO_VERSION);
+        if welcome.count > E.screencols welcome.count = E.screencols;
+           
+        // Calculate padding for centering
+        padding := (E.screencols - welcome.count) / 2;
+        if padding {
+            append(builder, "~");
+            padding -= 1;
+        }
+        while padding > 0 {
+            append(builder, " ");
+            padding -= 1;
+        }
+           
+        append(builder, welcome);
+    } else {
+        append(builder, "~");
+    }
     
     if y < E.screenrows - 1 {
       append(builder, "\x1b[K");
