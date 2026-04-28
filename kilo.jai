@@ -109,22 +109,30 @@ get_window_size :: (rows: *int, cols: *int) -> int {
 
 /*** output ***/
 
-editor_draw_rows :: () {
-  for 0..E.screenrows-1 {
-    write(STDOUT_FILENO, "~".data, 1);
-    
-    if it < E.screenrows - 1 {
-      write(STDOUT_FILENO, "\r\n".data, 2);
+editor_draw_rows :: (builder: *String_Builder) {
+  for y: 0..E.screenrows-1 {
+    append(builder, "~");
+    if y < E.screenrows - 1 {
+      append(builder, "\r\n");
     }
   }
 }
 
 editor_refresh_screen :: () {
-  write(STDOUT_FILENO, "\x1b[2J".data, 4);
-  write(STDOUT_FILENO, "\x1b[H".data, 3);
+  builder: String_Builder;  
+  
+  append(*builder, "\x1b[2J");
+  append(*builder, "\x1b[H");
 
-  editor_draw_rows();
-  write(STDOUT_FILENO, "\x1b[H".data, 3);
+  editor_draw_rows(*builder);
+  
+  append(*builder, "\x1b[H");
+  
+  // Convert builder to a string and write it to stdout
+  final_string := builder_to_string(*builder);
+  defer free(final_string); // Remember to free the allocated string!
+  
+  write(STDOUT_FILENO, final_string.data, cast(u64) final_string.count);
 }
 
 /*** input ***/
@@ -149,6 +157,7 @@ init_editor :: () {
 main :: () {
     enable_raw_mode();
     defer disable_raw_mode();
+    
     init_editor();
 
     while !E.quit {
