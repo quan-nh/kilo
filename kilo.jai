@@ -112,7 +112,9 @@ get_window_size :: (rows: *int, cols: *int) -> int {
 editor_draw_rows :: (builder: *String_Builder) {
   for y: 0..E.screenrows-1 {
     append(builder, "~");
+    
     if y < E.screenrows - 1 {
+      append(builder, "\x1b[K");
       append(builder, "\r\n");
     }
   }
@@ -122,7 +124,6 @@ editor_refresh_screen :: () {
   builder: String_Builder;  
   
   append(*builder, "\x1b[?25l");
-  append(*builder, "\x1b[2J");
   append(*builder, "\x1b[H");
 
   editor_draw_rows(*builder);
