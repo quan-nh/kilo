@@ -121,12 +121,14 @@ editor_draw_rows :: (builder: *String_Builder) {
 editor_refresh_screen :: () {
   builder: String_Builder;  
   
+  append(*builder, "\x1b[?25l");
   append(*builder, "\x1b[2J");
   append(*builder, "\x1b[H");
 
   editor_draw_rows(*builder);
   
   append(*builder, "\x1b[H");
+  append(*builder, "\x1b[?25h");
   
   // Convert builder to a string and write it to stdout
   final_string := builder_to_string(*builder);
