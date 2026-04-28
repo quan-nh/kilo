@@ -14,6 +14,7 @@ editor_config :: struct {
   screenrows: int;
   screencols: int;
   orig_termios: termios;
+  quit: bool;
 };
 
 E: editor_config;
@@ -28,6 +29,8 @@ winsize :: struct {
 /*** terminal ***/
 
 die :: (s: string) {
+    disable_raw_mode(); // Restore terminal first!
+    
     write(STDOUT_FILENO, "\x1b[2J".data, 4);
     write(STDOUT_FILENO, "\x1b[H".data, 3);
 
@@ -38,8 +41,7 @@ die :: (s: string) {
 }
 
 disable_raw_mode :: () {
-  if tcsetattr(STDIN_FILENO, TCSAFLUSH, *E.orig_termios) == -1
-    die("tcsetattr");
+  tcsetattr(STDIN_FILENO, TCSAFLUSH, *E.orig_termios);
 }
 
 enable_raw_mode :: () {
@@ -134,7 +136,7 @@ editor_process_keypress :: () {
         case #run CTRL_KEY(#char "q");
           write(STDOUT_FILENO, "\x1b[2J".data, 4);
           write(STDOUT_FILENO, "\x1b[H".data, 3);
-          exit(0);
+          E.quit = true;
     }
 }
 
@@ -149,7 +151,7 @@ main :: () {
     defer disable_raw_mode();
     init_editor();
 
-    while true {
+    while !E.quit {
         editor_refresh_screen();
         editor_process_keypress();
     }
