@@ -10,6 +10,14 @@ CTRL_KEY :: inline (k: u8) -> u8 {
     return k & 0x1f;
 }
 
+editor_key :: enum u8 {
+    ARROW_LEFT  :: #char "a";
+    ARROW_RIGHT :: #char "d";
+    ARROW_UP    :: #char "w";
+    ARROW_DOWN  :: #char "s";
+}
+using editor_key;
+
 /*** data ***/
 
 editor_config :: struct {
@@ -76,10 +84,10 @@ editor_read_key :: () -> u8 {
     if read(STDIN_FILENO, *seq[1], 1) != 1 return 0x1b;
     if seq[0] == #char "[" {
       if seq[1] == {
-          case #char "A"; return #char "w"; // Up
-          case #char "B"; return #char "s"; // Down
-          case #char "C"; return #char "d"; // Right
-          case #char "D"; return #char "a"; // Left
+          case #char "A"; return cast(u8) ARROW_UP;
+          case #char "B"; return cast(u8) ARROW_DOWN;
+          case #char "C"; return cast(u8) ARROW_RIGHT;
+          case #char "D"; return cast(u8) ARROW_LEFT;
       }
     }
     return 0x1b;
@@ -180,14 +188,10 @@ editor_refresh_screen :: () {
 
 editor_move_cursor :: (key: u8) {
   if key == {
-    case #char "a";
-      E.cx -= 1;
-    case #char "d";
-      E.cx += 1;
-    case #char "w";
-      E.cy -= 1;
-    case #char "s";
-      E.cy += 1;
+      case cast(u8) ARROW_LEFT;  E.cx -= 1;
+      case cast(u8) ARROW_RIGHT; E.cx += 1;
+      case cast(u8) ARROW_UP;    E.cy -= 1;
+      case cast(u8) ARROW_DOWN;  E.cy += 1;
   }
 }
 
@@ -199,10 +203,10 @@ editor_process_keypress :: () {
             write(STDOUT_FILENO, "\x1b[2J".data, 4);
             write(STDOUT_FILENO, "\x1b[H".data, 3);
             E.quit = true;
-        case #char "w"; #through;
-        case #char "s"; #through;
-        case #char "a"; #through;
-        case #char "d";
+        case cast(u8) ARROW_UP;   #through;
+        case cast(u8) ARROW_DOWN; #through;
+        case cast(u8) ARROW_LEFT; #through;
+        case cast(u8) ARROW_RIGHT;
             editor_move_cursor(c);
     }
 }
