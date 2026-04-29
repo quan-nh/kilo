@@ -10,11 +10,11 @@ CTRL_KEY :: inline (k: u8) -> u8 {
     return k & 0x1f;
 }
 
-editor_key :: enum u8 {
-    ARROW_LEFT  :: #char "a";
-    ARROW_RIGHT :: #char "d";
-    ARROW_UP    :: #char "w";
-    ARROW_DOWN  :: #char "s";
+editor_key :: enum {
+    ARROW_LEFT  :: 1000;
+    ARROW_RIGHT;
+    ARROW_UP;
+    ARROW_DOWN;
 }
 using editor_key;
 
@@ -69,7 +69,7 @@ enable_raw_mode :: () {
     if tcsetattr(STDIN_FILENO, TCSAFLUSH, *raw) == -1 die("tcgetattr");
 }
 
-editor_read_key :: () -> u8 {
+editor_read_key :: () -> int {
   nread: int;
   c: u8;
   while true {
@@ -84,10 +84,10 @@ editor_read_key :: () -> u8 {
     if read(STDIN_FILENO, *seq[1], 1) != 1 return 0x1b;
     if seq[0] == #char "[" {
       if seq[1] == {
-          case #char "A"; return cast(u8) ARROW_UP;
-          case #char "B"; return cast(u8) ARROW_DOWN;
-          case #char "C"; return cast(u8) ARROW_RIGHT;
-          case #char "D"; return cast(u8) ARROW_LEFT;
+          case #char "A"; return cast(int) ARROW_UP;
+          case #char "B"; return cast(int) ARROW_DOWN;
+          case #char "C"; return cast(int) ARROW_RIGHT;
+          case #char "D"; return cast(int) ARROW_LEFT;
       }
     }
     return 0x1b;
@@ -186,12 +186,12 @@ editor_refresh_screen :: () {
 
 /*** input ***/
 
-editor_move_cursor :: (key: u8) {
+editor_move_cursor :: (key: editor_key) {
   if key == {
-      case cast(u8) ARROW_LEFT;  E.cx -= 1;
-      case cast(u8) ARROW_RIGHT; E.cx += 1;
-      case cast(u8) ARROW_UP;    E.cy -= 1;
-      case cast(u8) ARROW_DOWN;  E.cy += 1;
+      case .ARROW_LEFT;  E.cx -= 1;
+      case .ARROW_RIGHT; E.cx += 1;
+      case .ARROW_UP;    E.cy -= 1;
+      case .ARROW_DOWN;  E.cy += 1;
   }
 }
 
@@ -203,11 +203,11 @@ editor_process_keypress :: () {
             write(STDOUT_FILENO, "\x1b[2J".data, 4);
             write(STDOUT_FILENO, "\x1b[H".data, 3);
             E.quit = true;
-        case cast(u8) ARROW_UP;   #through;
-        case cast(u8) ARROW_DOWN; #through;
-        case cast(u8) ARROW_LEFT; #through;
-        case cast(u8) ARROW_RIGHT;
-            editor_move_cursor(c);
+        case cast(int) ARROW_UP;   #through;
+        case cast(int) ARROW_DOWN; #through;
+        case cast(int) ARROW_LEFT; #through;
+        case cast(int) ARROW_RIGHT;
+            editor_move_cursor(cast(editor_key) c);
     }
 }
 
