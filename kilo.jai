@@ -15,6 +15,8 @@ editor_key :: enum {
     ARROW_RIGHT;
     ARROW_UP;
     ARROW_DOWN;
+    PAGE_UP;
+    PAGE_DOWN;
 }
 using editor_key;
 
@@ -80,15 +82,27 @@ editor_read_key :: () -> int {
 
   if c == 0x1b {
     seq: [3]u8;
+    
     if read(STDIN_FILENO, *seq[0], 1) != 1 return 0x1b;
     if read(STDIN_FILENO, *seq[1], 1) != 1 return 0x1b;
+    
     if seq[0] == #char "[" {
-      if seq[1] == {
-          case #char "A"; return cast(int) ARROW_UP;
-          case #char "B"; return cast(int) ARROW_DOWN;
-          case #char "C"; return cast(int) ARROW_RIGHT;
-          case #char "D"; return cast(int) ARROW_LEFT;
-      }
+        if seq[1] >= #char "0" && seq[1] <= #char "9" {
+            if read(STDIN_FILENO, *seq[2], 1) != 1 return 0x1b;
+            if seq[2] == #char "~" {
+                if seq[1] == {
+                    case #char "5"; return cast(int) PAGE_UP;
+                    case #char "6"; return cast(int) PAGE_DOWN;
+                }
+            }
+        } else {
+            if seq[1] == {
+                case #char "A"; return cast(int) ARROW_UP;
+                case #char "B"; return cast(int) ARROW_DOWN;
+                case #char "C"; return cast(int) ARROW_RIGHT;
+                case #char "D"; return cast(int) ARROW_LEFT;
+            }
+        }
     }
     return 0x1b;
   } else {
@@ -207,6 +221,14 @@ editor_process_keypress :: () {
             write(STDOUT_FILENO, "\x1b[2J".data, 4);
             write(STDOUT_FILENO, "\x1b[H".data, 3);
             E.quit = true;
+        
+        case cast(int) PAGE_UP;   #through;
+        case cast(int) PAGE_DOWN;
+            for 1..E.screenrows {
+                key_to_move := ifx c == cast(int) PAGE_UP then ARROW_UP else ARROW_DOWN;
+                editor_move_cursor(key_to_move);
+            }
+                  
         case cast(int) ARROW_UP;   #through;
         case cast(int) ARROW_DOWN; #through;
         case cast(int) ARROW_LEFT; #through;
