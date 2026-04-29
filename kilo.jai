@@ -13,6 +13,7 @@ CTRL_KEY :: inline (k: u8) -> u8 {
 /*** data ***/
 
 editor_config :: struct {
+  cx,cy: int;
   screenrows: int;
   screencols: int;
   orig_termios: termios;
@@ -148,7 +149,8 @@ editor_refresh_screen :: () {
 
   editor_draw_rows(*builder);
   
-  append(*builder, "\x1b[H");
+  print_to_builder(*builder, "\x1b[%;%H", E.cy + 1, E.cx + 1);
+    
   append(*builder, "\x1b[?25h");
   
   // Convert builder to a string and write it to stdout
