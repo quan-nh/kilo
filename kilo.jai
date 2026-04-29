@@ -162,14 +162,32 @@ editor_refresh_screen :: () {
 
 /*** input ***/
 
+editor_move_cursor :: (key: u8) {
+  if key == {
+    case #char "a";
+      E.cx -= 1;
+    case #char "d";
+      E.cx += 1;
+    case #char "w";
+      E.cy -= 1;
+    case #char "s";
+      E.cy += 1;
+  }
+}
+
 editor_process_keypress :: () {
     c := editor_read_key();
 
     if c == {
         case #run CTRL_KEY(#char "q");
-          write(STDOUT_FILENO, "\x1b[2J".data, 4);
-          write(STDOUT_FILENO, "\x1b[H".data, 3);
-          E.quit = true;
+            write(STDOUT_FILENO, "\x1b[2J".data, 4);
+            write(STDOUT_FILENO, "\x1b[H".data, 3);
+            E.quit = true;
+        case #char "w"; #through;
+        case #char "s"; #through;
+        case #char "a"; #through;
+        case #char "d";
+            editor_move_cursor(c);
     }
 }
 
