@@ -69,7 +69,23 @@ editor_read_key :: () -> u8 {
     if nread == 1 break;
     if nread == -1 && errno() != EAGAIN die("read");
   }
-  return c;
+  
+  if c == 0x1b {
+    seq: [3]u8;
+    if read(STDIN_FILENO, *seq[0], 1) != 1 return 0x1b;
+    if read(STDIN_FILENO, *seq[1], 1) != 1 return 0x1b;
+    if seq[0] == #char "[" {
+      if seq[1] == {
+          case #char "A"; return #char "w"; // Up
+          case #char "B"; return #char "s"; // Down
+          case #char "C"; return #char "d"; // Right
+          case #char "D"; return #char "a"; // Left
+      }
+    }
+    return 0x1b;
+  } else {
+    return c;
+  }
 }
 
 get_cursor_position :: (rows: *int, cols: *int) -> int {
