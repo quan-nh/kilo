@@ -41,7 +41,7 @@ winsize :: struct {
 
 die :: (s: string) {
     disable_raw_mode(); // Restore terminal first!
-    
+
     write(STDOUT_FILENO, "\x1b[2J".data, 4);
     write(STDOUT_FILENO, "\x1b[H".data, 3);
 
@@ -77,7 +77,7 @@ editor_read_key :: () -> int {
     if nread == 1 break;
     if nread == -1 && errno() != EAGAIN die("read");
   }
-  
+
   if c == 0x1b {
     seq: [3]u8;
     if read(STDIN_FILENO, *seq[0], 1) != 1 return 0x1b;
@@ -99,19 +99,19 @@ editor_read_key :: () -> int {
 get_cursor_position :: (rows: *int, cols: *int) -> int {
   buf: [32] u8;
   i: u32 = 0;
-  
+
   if write(STDOUT_FILENO, "\x1b[6n".data, 4) != 4 return -1;
-  
+
   while i < buf.count - 1 {
     if read(STDIN_FILENO, *buf[i], 1) != 1 break;
     if buf[i] == #char "R" break;
     i += 1;
   }
   buf[i] = 0;
-      
+
   if buf[0] != 0x1b || buf[1] != #char "[" return -1;
   if sscanf(*buf[2], "%d;%d", rows, cols) != 2 return -1;
-  
+
   return 0;
 }
 
@@ -122,11 +122,11 @@ get_window_size :: (rows: *int, cols: *int) -> int {
     // Linux: 0x5413
     // macOS: 0x40087468
     TIOCGWINSZ : u64 : #ifx OS == .MACOS then 0x40087468 else 0x5413;
-    
+
     if ioctl(STDOUT_FILENO, TIOCGWINSZ, *ws) == -1 || ws.ws_col == 0 {
       if write(STDOUT_FILENO, "\x1b[999C\x1b[999B".data, 12) != 12 return -1;
       return get_cursor_position(rows, cols);
-      
+
     } else {
       cols.* = cast(int) ws.ws_col;
       rows.* = cast(int) ws.ws_row;
@@ -141,7 +141,7 @@ editor_draw_rows :: (builder: *String_Builder) {
     if y == E.screenrows / 3 {
         welcome := tprint("Kilo editor -- version %", KILO_VERSION);
         if welcome.count > E.screencols welcome.count = E.screencols;
-           
+
         // Calculate padding for centering
         padding := (E.screencols - welcome.count) / 2;
         if padding {
@@ -152,12 +152,12 @@ editor_draw_rows :: (builder: *String_Builder) {
             append(builder, " ");
             padding -= 1;
         }
-           
+
         append(builder, welcome);
     } else {
         append(builder, "~");
     }
-    
+
     if y < E.screenrows - 1 {
       append(builder, "\x1b[K");
       append(builder, "\r\n");
@@ -166,21 +166,21 @@ editor_draw_rows :: (builder: *String_Builder) {
 }
 
 editor_refresh_screen :: () {
-  builder: String_Builder;  
-  
+  builder: String_Builder;
+
   append(*builder, "\x1b[?25l");
   append(*builder, "\x1b[H");
 
   editor_draw_rows(*builder);
-  
+
   print_to_builder(*builder, "\x1b[%;%H", E.cy + 1, E.cx + 1);
-    
+
   append(*builder, "\x1b[?25h");
-  
+
   // Convert builder to a string and write it to stdout
   final_string := builder_to_string(*builder);
   defer free(final_string); // Remember to free the allocated string!
-  
+
   write(STDOUT_FILENO, final_string.data, cast(u64) final_string.count);
 }
 
@@ -188,10 +188,14 @@ editor_refresh_screen :: () {
 
 editor_move_cursor :: (key: editor_key) {
   if key == {
-      case .ARROW_LEFT;  E.cx -= 1;
-      case .ARROW_RIGHT; E.cx += 1;
-      case .ARROW_UP;    E.cy -= 1;
-      case .ARROW_DOWN;  E.cy += 1;
+      case .ARROW_LEFT;
+          if E.cx != 0 {E.cx -= 1;}
+      case .ARROW_RIGHT;
+          if E.cx != E.screencols - 1 {E.cx += 1;}
+      case .ARROW_UP;
+          if E.cy != 0 {E.cy -= 1;}
+      case .ARROW_DOWN;
+          if E.cy != E.screenrows - 1 {E.cy += 1;}
   }
 }
 
@@ -220,7 +224,7 @@ init_editor :: () {
 main :: () {
     enable_raw_mode();
     defer disable_raw_mode();
-    
+
     init_editor();
 
     while !E.quit {
