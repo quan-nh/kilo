@@ -15,6 +15,7 @@ editor_key :: enum {
     ARROW_RIGHT;
     ARROW_UP;
     ARROW_DOWN;
+    DEL_KEY;
     HOME_KEY;
     END_KEY;
     PAGE_UP;
@@ -94,6 +95,7 @@ editor_read_key :: () -> int {
             if seq[2] == #char "~" {
                 if seq[1] == {
                     case #char "1"; return cast(int) HOME_KEY;
+                    case #char "3"; return cast(int) DEL_KEY;
                     case #char "4"; return cast(int) END_KEY;
                     case #char "5"; return cast(int) PAGE_UP;
                     case #char "6"; return cast(int) PAGE_DOWN;
