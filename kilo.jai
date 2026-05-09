@@ -25,10 +25,16 @@ using editor_key;
 
 /*** data ***/
 
+erow :: struct {
+    chars: string;
+}
+
 editor_config :: struct {
   cx,cy: int;
   screenrows: int;
   screencols: int;
+  numrows: int;
+  row: erow;
   orig_termios: termios;
   quit: bool;
 };
@@ -164,28 +170,44 @@ get_window_size :: (rows: *int, cols: *int) -> int {
     }
 }
 
+/*** file i/o ***/
+
+editor_open :: () {
+    line := "Hello, world!";
+    E.row.chars = copy_string(line); 
+    E.numrows = 1;
+}
+
 /*** output ***/
 
 editor_draw_rows :: (builder: *String_Builder) {
   for y: 0..E.screenrows-1 {
-    if y == E.screenrows / 3 {
-        welcome := tprint("Kilo editor -- version %", KILO_VERSION);
-        if welcome.count > E.screencols welcome.count = E.screencols;
-
-        // Calculate padding for centering
-        padding := (E.screencols - welcome.count) / 2;
-        if padding {
+    if y >= E.numrows {  
+        if y == E.screenrows / 3 {
+            welcome := tprint("Kilo editor -- version %", KILO_VERSION);
+            if welcome.count > E.screencols welcome.count = E.screencols;
+    
+            // Calculate padding for centering
+            padding := (E.screencols - welcome.count) / 2;
+            if padding {
+                append(builder, "~");
+                padding -= 1;
+            }
+            while padding > 0 {
+                append(builder, " ");
+                padding -= 1;
+            }
+    
+            append(builder, welcome);
+        } else {
             append(builder, "~");
-            padding -= 1;
         }
-        while padding > 0 {
-            append(builder, " ");
-            padding -= 1;
-        }
-
-        append(builder, welcome);
     } else {
-        append(builder, "~");
+        row_to_draw := E.row.chars;
+        if row_to_draw.count > E.screencols {
+            row_to_draw.count = E.screencols;
+        }
+        append(builder, row_to_draw);
     }
 
     if y < E.screenrows - 1 {
@@ -270,6 +292,7 @@ main :: () {
     defer disable_raw_mode();
 
     init_editor();
+    editor_open();
 
     while !E.quit {
         editor_refresh_screen();
