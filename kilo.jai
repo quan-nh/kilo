@@ -1,5 +1,7 @@
 #import "Basic";
 #import "POSIX";
+#import "File";
+#import "String";
 #load "termios_bindings.jai";
 
 /*** defines ***/
@@ -34,7 +36,7 @@ editor_config :: struct {
   screenrows: int;
   screencols: int;
   numrows: int;
-  row: erow;
+  rows: [..]erow;
   orig_termios: termios;
   quit: bool;
 };
@@ -172,10 +174,27 @@ get_window_size :: (rows: *int, cols: *int) -> int {
 
 /*** file i/o ***/
 
-editor_open :: () {
-    line := "Hello, world!";
-    E.row.chars = copy_string(line); 
-    E.numrows = 1;
+editor_open :: (filename: string) {
+    content, success := read_entire_file(filename);
+    if !success die("read_entire_file");
+    defer free(content);
+    
+    // Split the content into lines
+    lines := split(content, "\n");
+        
+    for * line: lines {
+        // Remove trailing \r if it exists
+        if line.count > 0 && line[line.count - 1] == "\r" {
+            line.count -= 1;
+        }
+    
+        // Add to our rows array
+        new_row: erow;
+        new_row.chars = copy_string(line.*);
+        array_add(*E.rows, new_row);
+    }
+        
+    E.numrows = E.rows.count;
 }
 
 /*** output ***/
@@ -203,7 +222,7 @@ editor_draw_rows :: (builder: *String_Builder) {
             append(builder, "~");
         }
     } else {
-        row_to_draw := E.row.chars;
+        row_to_draw := E.rows[y].chars;
         if row_to_draw.count > E.screencols {
             row_to_draw.count = E.screencols;
         }
@@ -288,11 +307,17 @@ init_editor :: () {
 }
 
 main :: () {
+    args := get_command_line_arguments();
+    
     enable_raw_mode();
     defer disable_raw_mode();
 
     init_editor();
-    editor_open();
+    
+    // args[0] is always the program name (e.g., "./kilo")
+    if args.count > 1 {
+        editor_open(args[1]);
+    }
 
     while !E.quit {
         editor_refresh_screen();
