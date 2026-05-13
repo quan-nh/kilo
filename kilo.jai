@@ -202,7 +202,7 @@ editor_open :: (filename: string) {
 editor_draw_rows :: (builder: *String_Builder) {
   for y: 0..E.screenrows-1 {
     if y >= E.numrows {  
-        if y == E.screenrows / 3 {
+        if E.numrows == 0 && y == E.screenrows / 3 {
             welcome := tprint("Kilo editor -- version %", KILO_VERSION);
             if welcome.count > E.screencols welcome.count = E.screencols;
     
