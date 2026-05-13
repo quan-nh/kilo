@@ -33,6 +33,7 @@ erow :: struct {
 
 editor_config :: struct {
   cx,cy: int;
+  rowoff: int;
   screenrows: int;
   screencols: int;
   numrows: int;
@@ -93,10 +94,10 @@ editor_read_key :: () -> int {
 
   if c == 0x1b {
     seq: [3]u8;
-    
+
     if read(STDIN_FILENO, *seq[0], 1) != 1 return 0x1b;
     if read(STDIN_FILENO, *seq[1], 1) != 1 return 0x1b;
-    
+
     if seq[0] == #char "[" {
         if seq[1] >= #char "0" && seq[1] <= #char "9" {
             if read(STDIN_FILENO, *seq[2], 1) != 1 return 0x1b;
@@ -127,7 +128,7 @@ editor_read_key :: () -> int {
             case #char "F"; return cast(int) END_KEY;
         }
     }
-       
+
     return 0x1b;
   } else {
     return c;
@@ -178,34 +179,44 @@ editor_open :: (filename: string) {
     content, success := read_entire_file(filename);
     if !success die("read_entire_file");
     defer free(content);
-    
+
     // Split the content into lines
     lines := split(content, "\n");
-        
+
     for * line: lines {
         // Remove trailing \r if it exists
         if line.count > 0 && line[line.count - 1] == "\r" {
             line.count -= 1;
         }
-    
+
         // Add to our rows array
         new_row: erow;
         new_row.chars = copy_string(line.*);
         array_add(*E.rows, new_row);
     }
-        
+
     E.numrows = E.rows.count;
 }
 
 /*** output ***/
 
+editor_scroll :: () {
+  if E.cy < E.rowoff {
+    E.rowoff = E.cy;
+  }
+  if E.cy >= E.rowoff + E.screenrows {
+    E.rowoff = E.cy - E.screenrows + 1;
+  }
+}
+
 editor_draw_rows :: (builder: *String_Builder) {
   for y: 0..E.screenrows-1 {
-    if y >= E.numrows {  
+    filerow := y + E.rowoff;
+    if filerow >= E.numrows {
         if E.numrows == 0 && y == E.screenrows / 3 {
             welcome := tprint("Kilo editor -- version %", KILO_VERSION);
             if welcome.count > E.screencols welcome.count = E.screencols;
-    
+
             // Calculate padding for centering
             padding := (E.screencols - welcome.count) / 2;
             if padding {
@@ -216,27 +227,29 @@ editor_draw_rows :: (builder: *String_Builder) {
                 append(builder, " ");
                 padding -= 1;
             }
-    
+
             append(builder, welcome);
         } else {
             append(builder, "~");
         }
     } else {
-        row_to_draw := E.rows[y].chars;
+        row_to_draw := E.rows[filerow].chars;
         if row_to_draw.count > E.screencols {
             row_to_draw.count = E.screencols;
         }
         append(builder, row_to_draw);
     }
 
+    append(builder, "\x1b[K");
     if y < E.screenrows - 1 {
-      append(builder, "\x1b[K");
       append(builder, "\r\n");
     }
   }
 }
 
 editor_refresh_screen :: () {
+  editor_scroll();
+
   builder: String_Builder;
 
   append(*builder, "\x1b[?25l");
@@ -244,7 +257,7 @@ editor_refresh_screen :: () {
 
   editor_draw_rows(*builder);
 
-  print_to_builder(*builder, "\x1b[%;%H", E.cy + 1, E.cx + 1);
+  print_to_builder(*builder, "\x1b[%;%H", E.cy - E.rowoff + 1, E.cx + 1);
 
   append(*builder, "\x1b[?25h");
 
@@ -266,7 +279,7 @@ editor_move_cursor :: (key: editor_key) {
       case .ARROW_UP;
           if E.cy != 0 {E.cy -= 1;}
       case .ARROW_DOWN;
-          if E.cy != E.screenrows - 1 {E.cy += 1;}
+          if E.cy < E.numrows {E.cy += 1;}
   }
 }
 
@@ -281,7 +294,7 @@ editor_process_keypress :: () {
 
         case cast(int) HOME_KEY;
             E.cx = 0;
-            
+
         case cast(int) END_KEY;
             E.cx = E.screencols - 1;
 
@@ -291,7 +304,7 @@ editor_process_keypress :: () {
                 key_to_move := ifx c == cast(int) PAGE_UP then ARROW_UP else ARROW_DOWN;
                 editor_move_cursor(key_to_move);
             }
-                  
+
         case cast(int) ARROW_UP;   #through;
         case cast(int) ARROW_DOWN; #through;
         case cast(int) ARROW_LEFT; #through;
@@ -308,12 +321,12 @@ init_editor :: () {
 
 main :: () {
     args := get_command_line_arguments();
-    
+
     enable_raw_mode();
     defer disable_raw_mode();
 
     init_editor();
-    
+
     // args[0] is always the program name (e.g., "./kilo")
     if args.count > 1 {
         editor_open(args[1]);
