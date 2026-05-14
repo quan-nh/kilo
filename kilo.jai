@@ -208,6 +208,12 @@ editor_scroll :: () {
   if E.cy >= E.rowoff + E.screenrows {
     E.rowoff = E.cy - E.screenrows + 1;
   }
+  if E.cx < E.coloff {
+    E.coloff = E.cx;
+  }
+  if E.cx >= E.coloff + E.screencols {
+    E.coloff = E.cx - E.screencols + 1;
+  }
 }
 
 editor_draw_rows :: (builder: *String_Builder) {
@@ -234,11 +240,11 @@ editor_draw_rows :: (builder: *String_Builder) {
         append(builder, "~");
       }
     } else {
-      row_to_draw := E.rows[filerow].chars;
-      if row_to_draw.count > E.screencols {
-        row_to_draw.count = E.screencols;
-      }
-      append(builder, row_to_draw);
+      len := E.rows[filerow].chars.count - E.coloff;
+      if len < 0 len = 0;
+      if len > E.screencols len = E.screencols;
+
+      append(builder, string.{len, E.rows[filerow].chars.data + E.coloff});
     }
 
     append(builder, "\x1b[K");
@@ -258,7 +264,7 @@ editor_refresh_screen :: () {
 
   editor_draw_rows(*builder);
 
-  print_to_builder(*builder, "\x1b[%;%H", E.cy - E.rowoff + 1, E.cx + 1);
+  print_to_builder(*builder, "\x1b[%;%H", E.cy - E.rowoff + 1, E.cx - E.coloff + 1);
 
   append(*builder, "\x1b[?25h");
 
@@ -276,7 +282,7 @@ editor_move_cursor :: (key: editor_key) {
     case .ARROW_LEFT;
       if E.cx != 0 {E.cx -= 1;}
     case .ARROW_RIGHT;
-      if E.cx != E.screencols - 1 {E.cx += 1;}
+      E.cx += 1;
     case .ARROW_UP;
       if E.cy != 0 {E.cy -= 1;}
     case .ARROW_DOWN;
