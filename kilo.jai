@@ -278,11 +278,15 @@ editor_refresh_screen :: () {
 /*** input ***/
 
 editor_move_cursor :: (key: editor_key) {
+    row := ifx E.cy >= E.numrows then null else *E.rows[E.cy];
+
   if key == {
     case .ARROW_LEFT;
       if E.cx != 0 {E.cx -= 1;}
     case .ARROW_RIGHT;
-      E.cx += 1;
+      if row && E.cx < row.chars.count {
+        E.cx += 1;
+      }
     case .ARROW_UP;
       if E.cy != 0 {E.cy -= 1;}
     case .ARROW_DOWN;
