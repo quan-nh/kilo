@@ -7,6 +7,7 @@
 /*** defines ***/
 
 KILO_VERSION :: "0.0.1";
+KILO_TAB_STOP :: 8;
 
 CTRL_KEY :: inline (k: u8) -> u8 {
     return k & 0x1f;
@@ -29,6 +30,7 @@ using editor_key;
 
 erow :: struct {
     chars: string;
+    render: string;
 }
 
 editor_config :: struct {
@@ -174,6 +176,37 @@ get_window_size :: (rows: *int, cols: *int) -> int {
     }
 }
 
+/*** row operations ***/
+
+editor_update_row :: (row: *erow) {
+    builder: String_Builder;
+
+    idx := 0;
+    for i: 0..row.chars.count-1 {
+        if row.chars[i] == #char "\t" {
+            append(*builder, " ");
+            idx += 1;
+            while idx % KILO_TAB_STOP != 0 {
+                append(*builder, " ");
+                idx += 1;
+            }
+        } else {
+            append(*builder, row.chars[i]);
+            idx += 1;
+        }
+    }
+
+    // Free old render if it exists
+    if row.render.data free(row.render.data);
+    row.render = builder_to_string(*builder);
+}
+
+editor_append_row :: (s: string) {
+	row := erow.{chars = s};
+	editor_update_row(*row);
+	array_add(*E.rows, row);
+}
+
 /*** file i/o ***/
 
 editor_open :: (filename: string) {
@@ -191,9 +224,7 @@ editor_open :: (filename: string) {
         }
 
         // Add to our rows array
-        new_row: erow;
-        new_row.chars = copy_string(line.*);
-        array_add(*E.rows, new_row);
+        editor_append_row(copy_string(line.*));
     }
 
     E.numrows = E.rows.count;
@@ -240,11 +271,11 @@ editor_draw_rows :: (builder: *String_Builder) {
                 append(builder, "~");
             }
         } else {
-            len := E.rows[filerow].chars.count - E.coloff;
+            len := E.rows[filerow].render.count - E.coloff;
             if len < 0 len = 0;
             if len > E.screencols len = E.screencols;
 
-            append(builder, string.{len, E.rows[filerow].chars.data + E.coloff});
+            append(builder, string.{len, E.rows[filerow].render.data + E.coloff});
         }
 
         append(builder, "\x1b[K");
