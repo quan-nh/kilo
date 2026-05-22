@@ -186,7 +186,7 @@ editor_open :: (filename: string) {
 
   for * line: lines {
     // Remove trailing \r if it exists
-    if line.count > 0 && line[line.count - 1] == "\r" {
+    if line.count > 0 && line.*[line.count - 1] == #char "\r" {
       line.count -= 1;
     }
 
@@ -278,7 +278,7 @@ editor_refresh_screen :: () {
 /*** input ***/
 
 editor_move_cursor :: (key: editor_key) {
-    row := ifx E.cy >= E.numrows then null else *E.rows[E.cy];
+  row: *erow = ifx E.cy >= E.numrows then null else *E.rows[E.cy];
 
   if key == {
     case .ARROW_LEFT;
@@ -291,6 +291,12 @@ editor_move_cursor :: (key: editor_key) {
       if E.cy != 0 {E.cy -= 1;}
     case .ARROW_DOWN;
       if E.cy < E.numrows {E.cy += 1;}
+  }
+
+  row = ifx E.cy >= E.numrows then null else *E.rows[E.cy];
+  rowlen := ifx row then row.chars.count else 0;
+  if E.cx > rowlen {
+    E.cx = rowlen;
   }
 }
 
