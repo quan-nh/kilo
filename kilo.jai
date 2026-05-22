@@ -291,6 +291,9 @@ editor_move_cursor :: (key: editor_key) {
         case .ARROW_RIGHT;
             if row && E.cx < row.chars.count {
                 E.cx += 1;
+            } else if row && E.cx == row.chars.count {
+                E.cy += 1;
+                E.cx = 0;
             }
         case .ARROW_UP;
             if E.cy != 0 {E.cy -= 1;}
