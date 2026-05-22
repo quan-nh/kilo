@@ -9,348 +9,348 @@
 KILO_VERSION :: "0.0.1";
 
 CTRL_KEY :: inline (k: u8) -> u8 {
-  return k & 0x1f;
+    return k & 0x1f;
 }
 
 editor_key :: enum {
-  ARROW_LEFT  :: 1000;
-  ARROW_RIGHT;
-  ARROW_UP;
-  ARROW_DOWN;
-  DEL_KEY;
-  HOME_KEY;
-  END_KEY;
-  PAGE_UP;
-  PAGE_DOWN;
+    ARROW_LEFT  :: 1000;
+    ARROW_RIGHT;
+    ARROW_UP;
+    ARROW_DOWN;
+    DEL_KEY;
+    HOME_KEY;
+    END_KEY;
+    PAGE_UP;
+    PAGE_DOWN;
 }
 using editor_key;
 
 /*** data ***/
 
 erow :: struct {
-  chars: string;
+    chars: string;
 }
 
 editor_config :: struct {
-  cx, cy: int;
-  rowoff: int;
-  coloff: int;
-  screenrows: int;
-  screencols: int;
-  numrows: int;
-  rows: [..]erow;
-  orig_termios: termios;
-  quit: bool;
+    cx, cy: int;
+    rowoff: int;
+    coloff: int;
+    screenrows: int;
+    screencols: int;
+    numrows: int;
+    rows: [..]erow;
+    orig_termios: termios;
+    quit: bool;
 };
 
 E: editor_config;
 
 winsize :: struct {
-  ws_row:    u16;
-  ws_col:    u16;
-  ws_xpixel: u16; // unused
-  ws_ypixel: u16; // unused
+    ws_row:    u16;
+    ws_col:    u16;
+    ws_xpixel: u16; // unused
+    ws_ypixel: u16; // unused
 }
 
 /*** terminal ***/
 
 die :: (s: string) {
-  disable_raw_mode(); // Restore terminal first!
+    disable_raw_mode(); // Restore terminal first!
 
-  write(STDOUT_FILENO, "\x1b[2J".data, 4);
-  write(STDOUT_FILENO, "\x1b[H".data, 3);
+    write(STDOUT_FILENO, "\x1b[2J".data, 4);
+    write(STDOUT_FILENO, "\x1b[H".data, 3);
 
-  // In Jai, we use temp_c_string to convert a Jai string
-  // to a null-terminated *u8 for C functions like perror.
-  perror(temp_c_string(s));
-  exit(1);
+    // In Jai, we use temp_c_string to convert a Jai string
+    // to a null-terminated *u8 for C functions like perror.
+    perror(temp_c_string(s));
+    exit(1);
 }
 
 disable_raw_mode :: () {
-  tcsetattr(STDIN_FILENO, TCSAFLUSH, *E.orig_termios);
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, *E.orig_termios);
 }
 
 enable_raw_mode :: () {
-  if tcgetattr(STDIN_FILENO, *E.orig_termios) == -1 die("tcgetattr");
+    if tcgetattr(STDIN_FILENO, *E.orig_termios) == -1 die("tcgetattr");
 
-  raw := E.orig_termios;
-  raw.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
-  raw.c_oflag &= ~(OPOST);
-  raw.c_cflag |= (CS8);
-  raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
-  raw.c_cc[VMIN] = 0;
-  raw.c_cc[VTIME] = 1;
+    raw := E.orig_termios;
+    raw.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
+    raw.c_oflag &= ~(OPOST);
+    raw.c_cflag |= (CS8);
+    raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
+    raw.c_cc[VMIN] = 0;
+    raw.c_cc[VTIME] = 1;
 
-  if tcsetattr(STDIN_FILENO, TCSAFLUSH, *raw) == -1 die("tcgetattr");
+    if tcsetattr(STDIN_FILENO, TCSAFLUSH, *raw) == -1 die("tcgetattr");
 }
 
 editor_read_key :: () -> int {
-  nread: int;
-  c: u8;
-  while true {
-    nread = read(STDIN_FILENO, *c, 1);
-    if nread == 1 break;
-    if nread == -1 && errno() != EAGAIN die("read");
-  }
-
-  if c == 0x1b {
-    seq: [3]u8;
-
-    if read(STDIN_FILENO, *seq[0], 1) != 1 return 0x1b;
-    if read(STDIN_FILENO, *seq[1], 1) != 1 return 0x1b;
-
-    if seq[0] == #char "[" {
-      if seq[1] >= #char "0" && seq[1] <= #char "9" {
-        if read(STDIN_FILENO, *seq[2], 1) != 1 return 0x1b;
-        if seq[2] == #char "~" {
-          if seq[1] == {
-            case #char "1"; return cast(int) HOME_KEY;
-            case #char "3"; return cast(int) DEL_KEY;
-            case #char "4"; return cast(int) END_KEY;
-            case #char "5"; return cast(int) PAGE_UP;
-            case #char "6"; return cast(int) PAGE_DOWN;
-            case #char "7"; return cast(int) HOME_KEY;
-            case #char "8"; return cast(int) END_KEY;
-          }
-        }
-      } else {
-        if seq[1] == {
-          case #char "A"; return cast(int) ARROW_UP;
-          case #char "B"; return cast(int) ARROW_DOWN;
-          case #char "C"; return cast(int) ARROW_RIGHT;
-          case #char "D"; return cast(int) ARROW_LEFT;
-          case #char "H"; return cast(int) HOME_KEY;
-          case #char "F"; return cast(int) END_KEY;
-        }
-      }
-    } else if seq[0] == #char "O" {
-      if seq[1] == {
-        case #char "H"; return cast(int) HOME_KEY;
-        case #char "F"; return cast(int) END_KEY;
-      }
+    nread: int;
+    c: u8;
+    while true {
+        nread = read(STDIN_FILENO, *c, 1);
+        if nread == 1 break;
+        if nread == -1 && errno() != EAGAIN die("read");
     }
 
-    return 0x1b;
-  } else {
-    return c;
-  }
+    if c == 0x1b {
+        seq: [3]u8;
+
+        if read(STDIN_FILENO, *seq[0], 1) != 1 return 0x1b;
+        if read(STDIN_FILENO, *seq[1], 1) != 1 return 0x1b;
+
+        if seq[0] == #char "[" {
+            if seq[1] >= #char "0" && seq[1] <= #char "9" {
+                if read(STDIN_FILENO, *seq[2], 1) != 1 return 0x1b;
+                if seq[2] == #char "~" {
+                    if seq[1] == {
+                        case #char "1"; return cast(int) HOME_KEY;
+                        case #char "3"; return cast(int) DEL_KEY;
+                        case #char "4"; return cast(int) END_KEY;
+                        case #char "5"; return cast(int) PAGE_UP;
+                        case #char "6"; return cast(int) PAGE_DOWN;
+                        case #char "7"; return cast(int) HOME_KEY;
+                        case #char "8"; return cast(int) END_KEY;
+                    }
+                }
+            } else {
+                if seq[1] == {
+                    case #char "A"; return cast(int) ARROW_UP;
+                    case #char "B"; return cast(int) ARROW_DOWN;
+                    case #char "C"; return cast(int) ARROW_RIGHT;
+                    case #char "D"; return cast(int) ARROW_LEFT;
+                    case #char "H"; return cast(int) HOME_KEY;
+                    case #char "F"; return cast(int) END_KEY;
+                }
+            }
+        } else if seq[0] == #char "O" {
+            if seq[1] == {
+                case #char "H"; return cast(int) HOME_KEY;
+                case #char "F"; return cast(int) END_KEY;
+            }
+        }
+
+        return 0x1b;
+    } else {
+        return c;
+    }
 }
 
 get_cursor_position :: (rows: *int, cols: *int) -> int {
-  buf: [32] u8;
-  i: u32 = 0;
+    buf: [32] u8;
+    i: u32 = 0;
 
-  if write(STDOUT_FILENO, "\x1b[6n".data, 4) != 4 return -1;
+    if write(STDOUT_FILENO, "\x1b[6n".data, 4) != 4 return -1;
 
-  while i < buf.count - 1 {
-    if read(STDIN_FILENO, *buf[i], 1) != 1 break;
-    if buf[i] == #char "R" break;
-    i += 1;
-  }
-  buf[i] = 0;
+    while i < buf.count - 1 {
+        if read(STDIN_FILENO, *buf[i], 1) != 1 break;
+        if buf[i] == #char "R" break;
+        i += 1;
+    }
+    buf[i] = 0;
 
-  if buf[0] != 0x1b || buf[1] != #char "[" return -1;
-  if sscanf(*buf[2], "%d;%d", rows, cols) != 2 return -1;
+    if buf[0] != 0x1b || buf[1] != #char "[" return -1;
+    if sscanf(*buf[2], "%d;%d", rows, cols) != 2 return -1;
 
-  return 0;
+    return 0;
 }
 
 get_window_size :: (rows: *int, cols: *int) -> int {
-  ws: winsize;
+    ws: winsize;
 
-  // TIOCGWINSZ constant varies by platform.
-  // Linux: 0x5413
-  // macOS: 0x40087468
-  TIOCGWINSZ : u64 : #ifx OS == .MACOS then 0x40087468 else 0x5413;
+    // TIOCGWINSZ constant varies by platform.
+    // Linux: 0x5413
+    // macOS: 0x40087468
+    TIOCGWINSZ : u64 : #ifx OS == .MACOS then 0x40087468 else 0x5413;
 
-  if ioctl(STDOUT_FILENO, TIOCGWINSZ, *ws) == -1 || ws.ws_col == 0 {
-    if write(STDOUT_FILENO, "\x1b[999C\x1b[999B".data, 12) != 12 return -1;
-    return get_cursor_position(rows, cols);
+    if ioctl(STDOUT_FILENO, TIOCGWINSZ, *ws) == -1 || ws.ws_col == 0 {
+        if write(STDOUT_FILENO, "\x1b[999C\x1b[999B".data, 12) != 12 return -1;
+        return get_cursor_position(rows, cols);
 
-  } else {
-    cols.* = cast(int) ws.ws_col;
-    rows.* = cast(int) ws.ws_row;
-    return 0;
-  }
+    } else {
+        cols.* = cast(int) ws.ws_col;
+        rows.* = cast(int) ws.ws_row;
+        return 0;
+    }
 }
 
 /*** file i/o ***/
 
 editor_open :: (filename: string) {
-  content, success := read_entire_file(filename);
-  if !success die("read_entire_file");
-  defer free(content);
+    content, success := read_entire_file(filename);
+    if !success die("read_entire_file");
+    defer free(content);
 
-  // Split the content into lines
-  lines := split(content, "\n");
+    // Split the content into lines
+    lines := split(content, "\n");
 
-  for * line: lines {
-    // Remove trailing \r if it exists
-    if line.count > 0 && line.*[line.count - 1] == #char "\r" {
-      line.count -= 1;
+    for * line: lines {
+        // Remove trailing \r if it exists
+        if line.count > 0 && line.*[line.count - 1] == #char "\r" {
+            line.count -= 1;
+        }
+
+        // Add to our rows array
+        new_row: erow;
+        new_row.chars = copy_string(line.*);
+        array_add(*E.rows, new_row);
     }
 
-    // Add to our rows array
-    new_row: erow;
-    new_row.chars = copy_string(line.*);
-    array_add(*E.rows, new_row);
-  }
-
-  E.numrows = E.rows.count;
+    E.numrows = E.rows.count;
 }
 
 /*** output ***/
 
 editor_scroll :: () {
-  if E.cy < E.rowoff {
-    E.rowoff = E.cy;
-  }
-  if E.cy >= E.rowoff + E.screenrows {
-    E.rowoff = E.cy - E.screenrows + 1;
-  }
-  if E.cx < E.coloff {
-    E.coloff = E.cx;
-  }
-  if E.cx >= E.coloff + E.screencols {
-    E.coloff = E.cx - E.screencols + 1;
-  }
+    if E.cy < E.rowoff {
+        E.rowoff = E.cy;
+    }
+    if E.cy >= E.rowoff + E.screenrows {
+        E.rowoff = E.cy - E.screenrows + 1;
+    }
+    if E.cx < E.coloff {
+        E.coloff = E.cx;
+    }
+    if E.cx >= E.coloff + E.screencols {
+        E.coloff = E.cx - E.screencols + 1;
+    }
 }
 
 editor_draw_rows :: (builder: *String_Builder) {
-  for y: 0..E.screenrows-1 {
-    filerow := y + E.rowoff;
-    if filerow >= E.numrows {
-      if E.numrows == 0 && y == E.screenrows / 3 {
-        welcome := tprint("Kilo editor -- version %", KILO_VERSION);
-        if welcome.count > E.screencols welcome.count = E.screencols;
+    for y: 0..E.screenrows-1 {
+        filerow := y + E.rowoff;
+        if filerow >= E.numrows {
+            if E.numrows == 0 && y == E.screenrows / 3 {
+                welcome := tprint("Kilo editor -- version %", KILO_VERSION);
+                if welcome.count > E.screencols welcome.count = E.screencols;
 
-        // Calculate padding for centering
-        padding := (E.screencols - welcome.count) / 2;
-        if padding {
-          append(builder, "~");
-          padding -= 1;
+                // Calculate padding for centering
+                padding := (E.screencols - welcome.count) / 2;
+                if padding {
+                    append(builder, "~");
+                    padding -= 1;
+                }
+                while padding > 0 {
+                    append(builder, " ");
+                    padding -= 1;
+                }
+
+                append(builder, welcome);
+            } else {
+                append(builder, "~");
+            }
+        } else {
+            len := E.rows[filerow].chars.count - E.coloff;
+            if len < 0 len = 0;
+            if len > E.screencols len = E.screencols;
+
+            append(builder, string.{len, E.rows[filerow].chars.data + E.coloff});
         }
-        while padding > 0 {
-          append(builder, " ");
-          padding -= 1;
+
+        append(builder, "\x1b[K");
+        if y < E.screenrows - 1 {
+            append(builder, "\r\n");
         }
-
-        append(builder, welcome);
-      } else {
-        append(builder, "~");
-      }
-    } else {
-      len := E.rows[filerow].chars.count - E.coloff;
-      if len < 0 len = 0;
-      if len > E.screencols len = E.screencols;
-
-      append(builder, string.{len, E.rows[filerow].chars.data + E.coloff});
     }
-
-    append(builder, "\x1b[K");
-    if y < E.screenrows - 1 {
-      append(builder, "\r\n");
-    }
-  }
 }
 
 editor_refresh_screen :: () {
-  editor_scroll();
+    editor_scroll();
 
-  builder: String_Builder;
+    builder: String_Builder;
 
-  append(*builder, "\x1b[?25l");
-  append(*builder, "\x1b[H");
+    append(*builder, "\x1b[?25l");
+    append(*builder, "\x1b[H");
 
-  editor_draw_rows(*builder);
+    editor_draw_rows(*builder);
 
-  print_to_builder(*builder, "\x1b[%;%H", E.cy - E.rowoff + 1, E.cx - E.coloff + 1);
+    print_to_builder(*builder, "\x1b[%;%H", E.cy - E.rowoff + 1, E.cx - E.coloff + 1);
 
-  append(*builder, "\x1b[?25h");
+    append(*builder, "\x1b[?25h");
 
-  // Convert builder to a string and write it to stdout
-  final_string := builder_to_string(*builder);
-  defer free(final_string); // Remember to free the allocated string!
+    // Convert builder to a string and write it to stdout
+    final_string := builder_to_string(*builder);
+    defer free(final_string); // Remember to free the allocated string!
 
-  write(STDOUT_FILENO, final_string.data, cast(u64) final_string.count);
+    write(STDOUT_FILENO, final_string.data, cast(u64) final_string.count);
 }
 
 /*** input ***/
 
 editor_move_cursor :: (key: editor_key) {
-  row: *erow = ifx E.cy >= E.numrows then null else *E.rows[E.cy];
+    row: *erow = ifx E.cy >= E.numrows then null else *E.rows[E.cy];
 
-  if key == {
-    case .ARROW_LEFT;
-      if E.cx != 0 {E.cx -= 1;}
-    case .ARROW_RIGHT;
-      if row && E.cx < row.chars.count {
-        E.cx += 1;
-      }
-    case .ARROW_UP;
-      if E.cy != 0 {E.cy -= 1;}
-    case .ARROW_DOWN;
-      if E.cy < E.numrows {E.cy += 1;}
-  }
+    if key == {
+        case .ARROW_LEFT;
+            if E.cx != 0 {E.cx -= 1;}
+        case .ARROW_RIGHT;
+            if row && E.cx < row.chars.count {
+                E.cx += 1;
+            }
+        case .ARROW_UP;
+            if E.cy != 0 {E.cy -= 1;}
+        case .ARROW_DOWN;
+            if E.cy < E.numrows {E.cy += 1;}
+    }
 
-  row = ifx E.cy >= E.numrows then null else *E.rows[E.cy];
-  rowlen := ifx row then row.chars.count else 0;
-  if E.cx > rowlen {
-    E.cx = rowlen;
-  }
+    row = ifx E.cy >= E.numrows then null else *E.rows[E.cy];
+    rowlen := ifx row then row.chars.count else 0;
+    if E.cx > rowlen {
+        E.cx = rowlen;
+    }
 }
 
 editor_process_keypress :: () {
-  c := editor_read_key();
+    c := editor_read_key();
 
-  if c == {
-    case #run CTRL_KEY(#char "q");
-      write(STDOUT_FILENO, "\x1b[2J".data, 4);
-      write(STDOUT_FILENO, "\x1b[H".data, 3);
-      E.quit = true;
+    if c == {
+        case #run CTRL_KEY(#char "q");
+            write(STDOUT_FILENO, "\x1b[2J".data, 4);
+            write(STDOUT_FILENO, "\x1b[H".data, 3);
+            E.quit = true;
 
-    case cast(int) HOME_KEY;
-      E.cx = 0;
+        case cast(int) HOME_KEY;
+            E.cx = 0;
 
-    case cast(int) END_KEY;
-      E.cx = E.screencols - 1;
+        case cast(int) END_KEY;
+            E.cx = E.screencols - 1;
 
-    case cast(int) PAGE_UP;   #through;
-    case cast(int) PAGE_DOWN;
-      for 1..E.screenrows {
-        key_to_move := ifx c == cast(int) PAGE_UP then ARROW_UP else ARROW_DOWN;
-        editor_move_cursor(key_to_move);
-      }
+        case cast(int) PAGE_UP;   #through;
+        case cast(int) PAGE_DOWN;
+            for 1..E.screenrows {
+                key_to_move := ifx c == cast(int) PAGE_UP then ARROW_UP else ARROW_DOWN;
+                editor_move_cursor(key_to_move);
+            }
 
-    case cast(int) ARROW_UP;   #through;
-    case cast(int) ARROW_DOWN; #through;
-    case cast(int) ARROW_LEFT; #through;
-    case cast(int) ARROW_RIGHT;
-      editor_move_cursor(cast(editor_key) c);
-  }
+        case cast(int) ARROW_UP;   #through;
+        case cast(int) ARROW_DOWN; #through;
+        case cast(int) ARROW_LEFT; #through;
+        case cast(int) ARROW_RIGHT;
+            editor_move_cursor(cast(editor_key) c);
+    }
 }
 
 /*** init ***/
 
 init_editor :: () {
-  if get_window_size(*E.screenrows, *E.screencols) == -1 die("getWindowSize");
+    if get_window_size(*E.screenrows, *E.screencols) == -1 die("getWindowSize");
 }
 
 main :: () {
-  args := get_command_line_arguments();
+    args := get_command_line_arguments();
 
-  enable_raw_mode();
-  defer disable_raw_mode();
+    enable_raw_mode();
+    defer disable_raw_mode();
 
-  init_editor();
+    init_editor();
 
-  // args[0] is always the program name (e.g., "./kilo")
-  if args.count > 1 {
-    editor_open(args[1]);
-  }
+    // args[0] is always the program name (e.g., "./kilo")
+    if args.count > 1 {
+        editor_open(args[1]);
+    }
 
-  while !E.quit {
-    editor_refresh_screen();
-    editor_process_keypress();
-  }
+    while !E.quit {
+        editor_refresh_screen();
+        editor_process_keypress();
+    }
 }
