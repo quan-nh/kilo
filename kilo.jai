@@ -35,6 +35,7 @@ erow :: struct {
 
 editor_config :: struct {
     cx, cy: int;
+    rx: int;
     rowoff: int;
     coloff: int;
     screenrows: int;
@@ -178,6 +179,17 @@ get_window_size :: (rows: *int, cols: *int) -> int {
 
 /*** row operations ***/
 
+editor_row_cx_to_rx :: (row: *erow, cx: int) -> int {
+    rx := 0;
+    for j: 0..cx-1 {
+        if row.chars[j] == #char "\t" {
+            rx += (KILO_TAB_STOP - 1) - (rx % KILO_TAB_STOP);
+        }
+        rx += 1;
+    }
+    return rx;
+}
+
 editor_update_row :: (row: *erow) {
     builder: String_Builder;
 
@@ -233,17 +245,22 @@ editor_open :: (filename: string) {
 /*** output ***/
 
 editor_scroll :: () {
+    E.rx = E.cx;
+    if E.cy < E.numrows {
+        E.rx = editor_row_cx_to_rx(*E.rows[E.cy], E.cx);
+    }
+
     if E.cy < E.rowoff {
         E.rowoff = E.cy;
     }
     if E.cy >= E.rowoff + E.screenrows {
         E.rowoff = E.cy - E.screenrows + 1;
     }
-    if E.cx < E.coloff {
-        E.coloff = E.cx;
+    if E.rx < E.coloff {
+        E.coloff = E.rx;
     }
-    if E.cx >= E.coloff + E.screencols {
-        E.coloff = E.cx - E.screencols + 1;
+    if E.rx >= E.coloff + E.screencols {
+        E.coloff = E.rx - E.screencols + 1;
     }
 }
 
@@ -295,7 +312,7 @@ editor_refresh_screen :: () {
 
     editor_draw_rows(*builder);
 
-    print_to_builder(*builder, "\x1b[%;%H", E.cy - E.rowoff + 1, E.cx - E.coloff + 1);
+    print_to_builder(*builder, "\x1b[%;%H", E.cy - E.rowoff + 1, E.rx - E.coloff + 1);
 
     append(*builder, "\x1b[?25h");
 
