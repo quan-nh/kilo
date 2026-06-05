@@ -369,10 +369,18 @@ editor_process_keypress :: () {
             E.cx = 0;
 
         case cast(int) END_KEY;
-            E.cx = E.screencols - 1;
+            if E.cy < E.numrows
+                E.cx = E.rows[E.cy].chars.count;
 
         case cast(int) PAGE_UP;   #through;
         case cast(int) PAGE_DOWN;
+            if c == cast(int) PAGE_UP {
+                E.cy = E.rowoff;
+            } else if c == cast(int) PAGE_DOWN {
+                E.cy = E.rowoff + E.screenrows - 1;
+                if (E.cy > E.numrows) E.cy = E.numrows;
+            }
+                
             for 1..E.screenrows {
                 key_to_move := ifx c == cast(int) PAGE_UP then ARROW_UP else ARROW_DOWN;
                 editor_move_cursor(key_to_move);
