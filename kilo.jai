@@ -43,6 +43,8 @@ editor_config :: struct {
     numrows: int;
     rows: [..]erow;
     filename: string;
+    statusmsg: string;
+    statusmsg_time: time_t;
     orig_termios: termios;
     quit: bool;
 };
@@ -327,6 +329,18 @@ editor_draw_status_bar :: (builder: *String_Builder) {
     }
 
     append(builder, "\x1b[m");
+    append(builder, "\r\n");
+}
+
+editor_draw_message_bar :: (builder: *String_Builder) {
+    append(builder, "\x1b[K");
+
+    msg := E.statusmsg;
+    if msg.count > E.screencols msg.count = E.screencols;
+
+    if msg.count && time(null) - E.statusmsg_time < 5 {
+        append(builder, msg);
+    }
 }
 
 editor_refresh_screen :: () {
@@ -339,6 +353,7 @@ editor_refresh_screen :: () {
 
     editor_draw_rows(*builder);
     editor_draw_status_bar(*builder);
+    editor_draw_message_bar(*builder);
 
     print_to_builder(*builder, "\x1b[%;%H", E.cy - E.rowoff + 1, E.rx - E.coloff + 1);
 
@@ -349,6 +364,14 @@ editor_refresh_screen :: () {
     defer free(final_string); // Remember to free the allocated string!
 
     write(STDOUT_FILENO, final_string.data, cast(u64) final_string.count);
+}
+
+editor_set_status_message :: (fmt: string, args: ..Any) {
+    if E.statusmsg.data free(E.statusmsg);
+
+    formatted := tprint(fmt, ..args);
+    E.statusmsg = copy_string(formatted);
+    E.statusmsg_time = time(null);
 }
 
 /*** input ***/
@@ -426,7 +449,7 @@ editor_process_keypress :: () {
 
 init_editor :: () {
     if get_window_size(*E.screenrows, *E.screencols) == -1 die("getWindowSize");
-    E.screenrows -= 1;
+    E.screenrows -= 2;
 }
 
 main :: () {
@@ -442,8 +465,12 @@ main :: () {
         editor_open(args[1]);
     }
 
+    editor_set_status_message("HELP: Ctrl-Q = quit");
+
     while !E.quit {
         editor_refresh_screen();
         editor_process_keypress();
     }
+
+    if E.statusmsg.data free(E.statusmsg);
 }
