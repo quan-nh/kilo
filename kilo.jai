@@ -42,6 +42,7 @@ editor_config :: struct {
     screencols: int;
     numrows: int;
     rows: [..]erow;
+    filename: string;
     orig_termios: termios;
     quit: bool;
 };
@@ -222,6 +223,7 @@ editor_append_row :: (s: string) {
 /*** file i/o ***/
 
 editor_open :: (filename: string) {
+    E.filename = filename;
     content, success := read_entire_file(filename);
     if !success die("read_entire_file");
     defer free(content);
@@ -296,10 +298,35 @@ editor_draw_rows :: (builder: *String_Builder) {
         }
 
         append(builder, "\x1b[K");
-        if y < E.screenrows - 1 {
-            append(builder, "\r\n");
+        append(builder, "\r\n");
+    }
+}
+
+editor_draw_status_bar :: (builder: *String_Builder) {
+    append(builder, "\x1b[7m");
+
+    filename := ifx E.filename then E.filename else "[No Name]";
+    display_filename := filename;
+    if display_filename.count > 20 display_filename.count = 20;
+
+    status := tprint("% - % lines", display_filename, E.numrows);
+    if status.count > E.screencols status.count = E.screencols;
+    append(builder, status);
+
+    rstatus := tprint("%/%", E.cy + 1, E.numrows);
+
+    len := status.count;
+    while len < E.screencols {
+        if E.screencols - len == rstatus.count {
+            append(builder, rstatus);
+            break;
+        } else {
+            append(builder, " ");
+            len += 1;
         }
     }
+
+    append(builder, "\x1b[m");
 }
 
 editor_refresh_screen :: () {
@@ -311,6 +338,7 @@ editor_refresh_screen :: () {
     append(*builder, "\x1b[H");
 
     editor_draw_rows(*builder);
+    editor_draw_status_bar(*builder);
 
     print_to_builder(*builder, "\x1b[%;%H", E.cy - E.rowoff + 1, E.rx - E.coloff + 1);
 
@@ -380,7 +408,7 @@ editor_process_keypress :: () {
                 E.cy = E.rowoff + E.screenrows - 1;
                 if (E.cy > E.numrows) E.cy = E.numrows;
             }
-                
+
             for 1..E.screenrows {
                 key_to_move := ifx c == cast(int) PAGE_UP then ARROW_UP else ARROW_DOWN;
                 editor_move_cursor(key_to_move);
@@ -398,6 +426,7 @@ editor_process_keypress :: () {
 
 init_editor :: () {
     if get_window_size(*E.screenrows, *E.screencols) == -1 die("getWindowSize");
+    E.screenrows -= 1;
 }
 
 main :: () {
