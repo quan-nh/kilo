@@ -14,6 +14,7 @@ CTRL_KEY :: inline (k: u8) -> u8 {
 }
 
 editor_key :: enum {
+    BACKSPACE :: 127;
     ARROW_LEFT  :: 1000;
     ARROW_RIGHT;
     ARROW_UP;
@@ -439,6 +440,9 @@ editor_process_keypress :: () {
     c := editor_read_key();
 
     if c == {
+        case #char "\r";
+            /* TODO */
+
         case #run CTRL_KEY(#char "q");
             write(STDOUT_FILENO, "\x1b[2J".data, 4);
             write(STDOUT_FILENO, "\x1b[H".data, 3);
@@ -450,6 +454,11 @@ editor_process_keypress :: () {
         case cast(int) END_KEY;
             if E.cy < E.numrows
                 E.cx = E.rows[E.cy].chars.count;
+
+        case cast(int) BACKSPACE;     #through;
+        case #run CTRL_KEY(#char "h"); #through;
+        case cast(int) DEL_KEY;
+            /* TODO */
 
         case cast(int) PAGE_UP;   #through;
         case cast(int) PAGE_DOWN;
@@ -470,9 +479,13 @@ editor_process_keypress :: () {
         case cast(int) ARROW_LEFT; #through;
         case cast(int) ARROW_RIGHT;
             editor_move_cursor(cast(editor_key) c);
-        
+
+        case #run CTRL_KEY(#char "l"); #through;
+        case 0x1b;
+            // Nothing.
+
         case;
-            editor_insert_char(c);    
+            editor_insert_char(c);
     }
 }
 
