@@ -2,6 +2,7 @@
 #import "POSIX";
 #import "File";
 #import "String";
+System :: #import "System";
 #load "termios_bindings.jai";
 
 /*** defines ***/
@@ -253,6 +254,15 @@ editor_row_insert_char :: (row: *erow, at: int, c: int) {
 
 /*** file i/o ***/
 
+editor_rows_to_string :: () -> string {
+    builder: String_Builder;
+    for 0..E.numrows-1 {
+        append(*builder, E.rows[it].chars);
+        append(*builder, "\n");
+    }
+    return builder_to_string(*builder);
+}
+
 editor_open :: (filename: string) {
     E.filename = filename;
     content, success := read_entire_file(filename);
@@ -273,6 +283,20 @@ editor_open :: (filename: string) {
     }
 
     E.numrows = E.rows.count;
+}
+
+editor_save :: () {
+    if !E.filename return;
+
+    buf := editor_rows_to_string();
+    defer free(buf);
+
+    success := write_entire_file(E.filename, buf);
+    if success {
+        editor_set_status_message("% bytes written to disk", buf.count);
+    } else {
+        editor_set_status_message("Can't save! I/O error: %", System.get_error_string(errno()));
+    }
 }
 
 /*** output ***/
@@ -448,6 +472,9 @@ editor_process_keypress :: () {
             write(STDOUT_FILENO, "\x1b[H".data, 3);
             E.quit = true;
 
+        case #run CTRL_KEY(#char "s");
+            editor_save();
+
         case cast(int) HOME_KEY;
             E.cx = 0;
 
@@ -509,7 +536,7 @@ main :: () {
         editor_open(args[1]);
     }
 
-    editor_set_status_message("HELP: Ctrl-Q = quit");
+    editor_set_status_message("HELP: Ctrl-S = save | Ctrl-Q = quit");
 
     while !E.quit {
         editor_refresh_screen();
@@ -518,3 +545,4 @@ main :: () {
 
     if E.statusmsg.data free(E.statusmsg);
 }
+
