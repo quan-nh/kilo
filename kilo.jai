@@ -182,6 +182,15 @@ get_window_size :: (rows: *int, cols: *int) -> int {
 
 /*** row operations ***/
 
+editor_insert_char :: (c: int) {
+    if E.cy == E.rows.count {
+        editor_append_row("");
+        E.numrows = E.rows.count;
+    }
+    editor_row_insert_char(*E.rows[E.cy], E.cx, c);
+    E.cx += 1;
+}
+
 editor_row_cx_to_rx :: (row: *erow, cx: int) -> int {
     rx := 0;
     for j: 0..cx-1 {
@@ -220,6 +229,25 @@ editor_append_row :: (s: string) {
 	row := erow.{chars = s};
 	editor_update_row(*row);
 	array_add(*E.rows, row);
+}
+
+editor_row_insert_char :: (row: *erow, at: int, c: int) {
+    if at < 0 || at > row.chars.count then at = row.chars.count;
+
+    row.chars.data = realloc(row.chars.data, row.chars.count + 2, row.chars.count);
+
+    // Shift characters using a while loop (downwards to avoid overwriting)
+    i := row.chars.count;
+    while i > at {
+        row.chars.data[i] = row.chars.data[i-1];
+        i -= 1;
+    }
+
+    row.chars.data[at] = cast(u8) c;
+    row.chars.count += 1;
+    row.chars.data[row.chars.count] = 0; // Null terminator for C-interop safety
+
+    editor_update_row(row);
 }
 
 /*** file i/o ***/
@@ -442,6 +470,9 @@ editor_process_keypress :: () {
         case cast(int) ARROW_LEFT; #through;
         case cast(int) ARROW_RIGHT;
             editor_move_cursor(cast(editor_key) c);
+        
+        case;
+            editor_insert_char(c);    
     }
 }
 
